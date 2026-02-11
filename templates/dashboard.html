@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+<div id="app">
+    <!-- Header -->
+    <header class="header">
+        <div class="header-left">
+            <div class="header-logos">
+                <img src="/static/img/Scroll_Logomark.ad5d0348.svg" alt="Scroll Logo" class="logo-icon" width="32"
+                    height="32">
+                <div class="header-text">
+                    <h1>Scroll DAO Treasury Allocation</h1>
+                    <span class="header-badge">Operations Committee</span>
+                    <span class="header-badge beta-badge">BETA</span>
+                </div>
+            </div>
+        </div>
+        <div class="header-right">
+            <span id="fetch-status" class="fetch-status">
+                <span class="pulse"></span> Auto-syncing
+            </span>
+            <div id="auth-area"></div>
+        </div>
+    </header>
+
+    <!-- Wallet Sub-Header -->
+    <div class="wallet-sub-header">
+        <div class="wallet-sub-center">
+            <h2 id="active-wallet-title">Loading...</h2>
+        </div>
+        <div class="wallet-sub-right">
+            <div id="wallet-selector-container" class="header-selector"></div>
+        </div>
+    </div>
+
+    <!-- Wallet Tabs removed (moved to header) -->
+    <!-- <nav class="wallet-tabs" id="wallet-tabs"></nav> -->
+
+    <!-- Dashboard Content -->
+    <main class="dashboard" id="dashboard-content">
+        <div class="loading-spinner" id="main-loader">
+            <div class="spinner"></div>
+            <p>Loading treasury data...</p>
+        </div>
+    </main>
+</div>
+
+<script src="/static/js/app.js"></script>
+{% endblock %}
