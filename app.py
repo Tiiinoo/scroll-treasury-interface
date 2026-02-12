@@ -116,7 +116,7 @@ PRICE_CACHE: Dict[str, Any] = {"timestamp": 0, "prices": {}}
 PRICE_CACHE_DURATION = 300  # 5 minutes
 
 def get_token_prices() -> Dict[str, float]:
-    """Fetch current prices for ETH and SCR from CoinGecko."""
+    """Fetch current prices for ETH and SCR from DefiLlama (more reliable for servers)."""
     now = time.time()
     
     # Return cached if valid
@@ -124,14 +124,23 @@ def get_token_prices() -> Dict[str, float]:
         return PRICE_CACHE["prices"]
         
     try:
-        # IDs: scroll, ethereum
-        url = "https://api.coingecko.com/api/v3/simple/price?ids=scroll,ethereum&vs_currencies=usd"
-        resp = requests.get(url, timeout=10)
+        # DefiLlama API (no strict rate limits on server IPs)
+        # using coingecko IDs: scroll, ethereum
+        url = "https://coins.llama.fi/prices/current/coingecko:scroll,coingecko:ethereum?searchWidth=4h"
+        
+        # Add User-Agent just in case
+        headers = {
+            "User-Agent": "Mozilla/5.0"
+        }
+        
+        resp = requests.get(url, headers=headers, timeout=10)
         data = resp.json()
         
+        coins = data.get("coins", {})
+        
         prices = {
-            "ETH": data.get("ethereum", {}).get("usd", 0),
-            "SCR": data.get("scroll", {}).get("usd", 0),
+            "ETH": coins.get("coingecko:ethereum", {}).get("price", 0),
+            "SCR": coins.get("coingecko:scroll", {}).get("price", 0),
         }
         
         PRICE_CACHE["timestamp"] = now

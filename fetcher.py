@@ -7,6 +7,7 @@ and stores them in the SQLite database.
 
 import time
 import logging
+from datetime import datetime, timezone
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -439,8 +440,7 @@ def fetch_historical_prices():
         cg_id = cg_ids.get(sym)
         if not cg_id:
             logger.warning("Skipping unknown token %s for historical price", sym)
-            # Insert 0 so we don't keep retrying? Or leave it to retry later?
-            # Let's insert 0 for now to avoid blocking, user can update DB manually if needed
+            # Insert 0 so we don't keep retrying
             conn = get_db()
             for d in dates:
                 conn.execute("INSERT OR IGNORE INTO token_prices (symbol, date, price) VALUES (?, ?, ?)", (sym, d, 0))
@@ -449,36 +449,37 @@ def fetch_historical_prices():
             continue
 
         for d in dates:
-            # CoinGecko format: DD-MM-YYYY
-            # d is YYYY-MM-DD
-            y, m, day = d.split('-')
-            cg_date = f"{day}-{m}-{y}"
-            
-            url = f"https://api.coingecko.com/api/v3/coins/{cg_id}/history?date={cg_date}"
+            # DefiLlama historical API: /prices/historical/{timestamp}/{protocol}:{token}
+            # Need strict timestamp for that date. Let's use noon UTC on that day.
             try:
+                dt_ts = int(datetime.strptime(d, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp()) + 43200
+                
+                url = f"https://coins.llama.fi/prices/historical/{dt_ts}/coingecko:{cg_id}?searchWidth=12h"
+                
                 logger.info("Fetching price for %s on %s...", sym, d)
                 resp = session.get(url, timeout=10)
-                if resp.status_code == 429:
-                    logger.warning("Rate limited, waiting 60s...")
-                    time.sleep(60)
-                    resp = session.get(url, timeout=10)
                 
                 if resp.status_code == 200:
                     data = resp.json()
-                    price = data.get("market_data", {}).get("current_price", {}).get("usd", 0)
+                    coins = data.get("coins", {})
+                    key = f"coingecko:{cg_id}"
+                    price = coins.get(key, {}).get("price", 0)
                     
-                    conn = get_db()
-                    conn.execute(
-                        "INSERT OR IGNORE INTO token_prices (symbol, date, price) VALUES (?, ?, ?)",
-                        (sym, d, price)
-                    )
-                    conn.commit()
-                    conn.close()
+                    if price > 0:
+                        conn = get_db()
+                        conn.execute(
+                            "INSERT OR IGNORE INTO token_prices (symbol, date, price) VALUES (?, ?, ?)",
+                            (sym, d, price)
+                        )
+                        conn.commit()
+                        conn.close()
+                    else:
+                        logger.warning("No price found for %s on %s", sym, d)
                 else:
                     logger.error("[fetcher] Failed %s: %s", url, resp.status_code)
                 
                 # Polite delay
-                time.sleep(1.5)
+                time.sleep(0.5)
                 
             except Exception as e:
                 logger.error("[fetcher] Error fetching %s price: %s", sym, e)
