@@ -73,6 +73,7 @@ CATEGORIES = {
         "Operations Committee Discretionary Budget",
         "Community Allocation",
         "Ecosystem Allocation",
+        "Internal Operations",
     ],
     "committee": [
         "Uncategorised",
@@ -82,22 +83,26 @@ CATEGORIES = {
         "Accountability Lead",
         "Accountability Operator",
         "Karma Gap Subscription",
+        "Internal Operations",
     ],
     "delegates": [
         "Uncategorised",
         "Governance Contribution Recognition",
         "Delegate Contributions Programme",
+        "Internal Operations",
     ],
     "community": [
         "Uncategorised",
         "Local Nodes",
         "Community Support Programme",
+        "Internal Operations",
     ],
     "ecosystem": [
         "Uncategorised",
         "Founder Enablement Fund",
         "Creator Fund",
         "Security Subsidy Programme",
+        "Internal Operations",
     ],
 }
 
