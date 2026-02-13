@@ -316,6 +316,7 @@ def api_transactions(wallet_id):
             "direction": r["direction"],
             "category": r["category"],
             "notes": r["notes"],
+            "signers": r["signers"],
             "is_error": r["is_error"],
         })
 
@@ -330,19 +331,23 @@ def api_transactions(wallet_id):
 @login_required
 def api_categorise(tx_id):
     data = request.get_json() or {}
-    category = data.get("category", "Uncategorised")
-    notes = data.get("notes", "")
+    
+    # Get current values first to valid partial updates
     conn = get_db()
+    current = conn.execute("SELECT category, notes FROM transactions WHERE id=?", (tx_id,)).fetchone()
+    if not current:
+        return jsonify({"error": "Transaction not found"}), 404
+        
+    category = data.get("category", current["category"])
+    notes = data.get("notes", current["notes"])
+    
     cursor = conn.execute(
         "UPDATE transactions SET category=?, notes=? WHERE id=?",
         (category, notes, tx_id),
     )
     conn.commit()
 
-    if cursor.rowcount == 0:
-        return jsonify({"error": "Transaction not found"}), 404
-
-    return jsonify({"success": True, "id": tx_id, "category": category})
+    return jsonify({"success": True, "id": tx_id, "category": category, "notes": notes})
 
 
 @app.route("/api/transactions/bulk-categorise", methods=["POST"])
@@ -654,21 +659,24 @@ def api_export(wallet_id):
     writer = csv.writer(output)
     writer.writerow([
         "Date", "TX Hash", "From", "To", "Amount", "Token",
-        "Type", "Direction", "Category", "Notes", "Block",
+        "Type", "Direction", "Category", "Notes", "Signers", "Block",
     ])
     for r in rows:
         writer.writerow([
             datetime.fromtimestamp(r["timestamp"], tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
             r["tx_hash"], r["from_address"], r["to_address"],
             r["value_decimal"], r["token_symbol"], r["tx_type"],
-            r["direction"], r["category"], r["notes"], r["block_number"],
+            r["direction"], r["category"], r["notes"], r["signers"], r["block_number"],
         ])
 
     output.seek(0)
+    
+    # improved filename
+    wallet_name = MULTISIGS.get(wallet_id, {}).get("name", wallet_id).replace(" ", "_")
     return Response(
         output.getvalue(),
         mimetype="text/csv",
-        headers={"Content-Disposition": f"attachment; filename=scroll_treasury_{wallet_id}.csv"},
+        headers={"Content-Disposition": f"attachment; filename={wallet_name}_transactions.csv"},
     )
 
 

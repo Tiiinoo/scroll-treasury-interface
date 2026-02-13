@@ -14,6 +14,9 @@ from urllib3.util.retry import Retry
 from models import get_db
 from config import SCROLLSCAN_API_BASE, SCROLLSCAN_API_KEY, SCROLL_CHAIN_ID, MULTISIGS
 
+# Safe Transaction Service API for Scroll
+SAFE_API_BASE = "https://safe-transaction-scroll.safe.global/api/v1"
+
 # Configure logger
 logger = logging.getLogger(__name__)
 
@@ -373,6 +376,8 @@ def fetch_all():
         time.sleep(0.3)
         fetch_internal_transactions(wallet_id, address)
         time.sleep(0.3)
+        fetch_safe_multisig_txs(wallet_id, address)
+        time.sleep(0.3)
         fetch_eth_balance(wallet_id, address)
         time.sleep(0.3)
     # Also compute token balances from transactions
@@ -485,6 +490,65 @@ def fetch_historical_prices():
                 logger.error("[fetcher] Error fetching %s price: %s", sym, e)
 
 
+# ── Safe Multisig Data ──────────────────────────────────────────────────
+
+def fetch_safe_multisig_txs(wallet_id: str, address: str):
+    """Fetch multisig transaction details (signers) from Safe Transaction Service."""
+    if not address:
+        return
+
+    # We only care about executed transactions
+    url = f"{SAFE_API_BASE}/safes/{address}/multisig-transactions/"
+    params = {
+        "executed": "true",
+        "limit": 100,  # Fetch last 100
+        "ordering": "-executionDate"
+    }
+
+    try:
+        resp = session.get(url, params=params, timeout=30)
+        if resp.status_code != 200:
+            logger.warning("Safe API error %s: %s", resp.status_code, resp.text)
+            return
+        
+        data = resp.json()
+        results = data.get("results", [])
+        
+        conn = get_db()
+        updated_count = 0
+        
+        for tx in results:
+            tx_hash = tx.get("transactionHash")
+            if not tx_hash:
+                continue
+                
+            # Extract signers
+            confirmations = tx.get("confirmations", [])
+            if not confirmations:
+                continue
+                
+            # specific logic: get owners from confirmations
+            signers = sorted([c["owner"] for c in confirmations])
+            signers_str = ",".join(signers)
+            
+            # Update transaction if it exists
+            # We only really care about outgoing transactions which match these multisig txs
+            cursor = conn.execute(
+                "UPDATE transactions SET signers = ? WHERE tx_hash = ? AND wallet_id = ?",
+                (signers_str, tx_hash, wallet_id)
+            )
+            updated_count += cursor.rowcount
+            
+        conn.commit()
+        conn.close()
+        
+        if updated_count > 0:
+            logger.info("%s/safe: Updated signers for %d transactions", wallet_id, updated_count)
+            
+    except Exception as e:
+        logger.error("[fetcher] Safe API error: %s", e)
+
+
 def _compute_token_balances(wallet_id: str = ""):
     """Compute approximate token balances from transaction history.
     
@@ -535,6 +599,8 @@ def fetch_single_wallet(wallet_id: str):
     fetch_erc20_transactions(wallet_id, address)
     time.sleep(0.3)
     fetch_internal_transactions(wallet_id, address)
+    time.sleep(0.3)
+    fetch_safe_multisig_txs(wallet_id, address)
     time.sleep(0.3)
     fetch_eth_balance(wallet_id, address)
     _compute_token_balances(wallet_id)

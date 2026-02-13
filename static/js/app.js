@@ -594,6 +594,16 @@ function renderTransactionsTable() {
             categoryCell = `<span class="tx-badge ${badgeClass}">${escapeHtml(tx.category)}</span>`;
         }
 
+        let notesCell;
+        if (state.authenticated) {
+            notesCell = `<input type="text" class="tx-note-input" value="${escapeHtml(tx.notes)}" 
+                onblur="updateTxNote(${tx.id}, this.value)" placeholder="Add note..." style="width:100%; min-width:120px;">`;
+        } else {
+            notesCell = `<span class="tx-note-text">${escapeHtml(tx.notes)}</span>`;
+        }
+
+        const signersHtml = formatSigners(tx.signers);
+
         return `<tr>
             <td>${escapeHtml(tx.date)}</td>
             <td><a class="tx-hash" href="https://scrollscan.com/tx/${escapeHtml(tx.tx_hash)}" target="_blank" rel="noopener">${escapeHtml(tx.tx_hash.slice(0, 10))}...</a></td>
@@ -602,13 +612,15 @@ function renderTransactionsTable() {
             <td><span class="tx-amount ${tx.direction}">${tx.direction === 'in' ? '+' : '-'}${formatTokenAmount(tx.value_decimal, tx.token_symbol)} ${escapeHtml(tx.token_symbol)}</span></td>
             <td>${escapeHtml(tx.tx_type)}</td>
             <td>${categoryCell}</td>
+            <td>${signersHtml}</td>
+            <td>${notesCell}</td>
         </tr>`;
     }).join('');
 
     return `<table class="tx-table">
         <thead><tr>
             <th>Date</th><th>TX Hash</th><th>From</th><th>To</th>
-            <th>Amount</th><th>Type</th><th>Category</th>
+            <th>Amount</th><th>Type</th><th>Category</th><th>Signers</th><th>Notes</th>
         </tr></thead>
         <tbody>${rows}</tbody>
     </table>`;
@@ -657,6 +669,24 @@ async function categoriseTx(txId, category) {
     }
 }
 
+async function updateTxNote(txId, notes) {
+    const tx = state.transactions.items.find(t => t.id === txId);
+    if (tx && tx.notes === notes) return; // No change
+
+    const data = await api(`/api/transactions/${txId}/categorise`, {
+        method: 'POST',
+        body: JSON.stringify({ notes }),
+    });
+
+    if (data.success) {
+        showToast('Note updated', 'success');
+        // Update local state
+        if (tx) tx.notes = notes;
+    } else {
+        showToast(data.error || 'Failed to update note', 'error');
+    }
+}
+
 // ── Actions ─────────────────────────────────────────────────────────────
 
 async function triggerFetch(walletId) {
@@ -698,6 +728,23 @@ function formatTokenAmount(amount, symbol) {
 function shortenAddr(addr) {
     if (!addr) return '';
     return addr.slice(0, 6) + '...' + addr.slice(-4);
+}
+
+function formatSigners(signersStr) {
+    if (!signersStr) return '<span class="text-muted">-</span>';
+    const signers = signersStr.split(',');
+
+    // Helper to generate signer link
+    const makeLink = addr => `<a href="https://scrollscan.com/address/${addr}" target="_blank" rel="noopener" class="signer-addr tx-hash" style="display:block; margin-bottom:2px;">${shortenAddr(addr)}</a>`;
+
+    // If many signers (more than 4), collapse them
+    if (signers.length > 4) {
+        return `<div class="signers-list" title="${signers.join('\n')}">
+            ${signers.length} signers
+        </div>`;
+    }
+
+    return signers.map(makeLink).join('');
 }
 
 function timeAgo(ts) {

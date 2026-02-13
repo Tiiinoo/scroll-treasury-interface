@@ -70,6 +70,7 @@ def init_db():
         gas_used        INTEGER NOT NULL DEFAULT 0,
         gas_price       TEXT NOT NULL DEFAULT '0',
         is_error        INTEGER NOT NULL DEFAULT 0,
+        signers         TEXT NOT NULL DEFAULT '',       -- JSON list of signer addresses
         FOREIGN KEY (wallet_id) REFERENCES wallets(id),
         UNIQUE(tx_hash, wallet_id, tx_type, from_address, to_address, contract_address)
     );
@@ -115,6 +116,13 @@ def init_db():
     CREATE INDEX IF NOT EXISTS idx_tx_token         ON transactions(token_symbol);
     CREATE INDEX IF NOT EXISTS idx_balances_wallet  ON balances(wallet_id);
     """)
+
+
+    # Migration: Add signers column if not exists
+    try:
+        cur.execute("ALTER TABLE transactions ADD COLUMN signers TEXT NOT NULL DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
 
     conn.commit()
     conn.close()
