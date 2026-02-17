@@ -70,7 +70,7 @@ python app.py
 ```
 
 Head over to `http://localhost:8080` in your browser.
-*   **Public Dashboard:** Accessible to everyone at `http://localhost:8080`.
+*   **Public Dashboard:** Accessible at `http://localhost:8080`.
 *   **Login:** Go to `/login` to access admin features like categorisation.
 
 ## Project Structure
