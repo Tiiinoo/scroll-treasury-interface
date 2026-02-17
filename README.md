@@ -35,7 +35,7 @@ You'll need to install **Python 3.10+**.
 
 1.  **Clone the repo:**
     ```bash
-    git clone <repo-url>
+    git clone https://github.com/Tiiinoo/scroll-treasury-interface/edit/main/README.md
     cd scroll-treasury
     ```
 
@@ -70,7 +70,7 @@ python app.py
 ```
 
 Head over to `http://localhost:8080` in your browser.
-*   **Public Dashboard:** Accessible to everyone at `/`.
+*   **Public Dashboard:** Accessible to everyone at `http://localhost:8080`.
 *   **Login:** Go to `/login` to access admin features like categorisation.
 
 ## Project Structure
