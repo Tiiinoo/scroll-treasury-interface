@@ -31,7 +31,7 @@ from config import (
     SECRET_KEY, AUTH_USERNAME, AUTH_PASSWORD,
     MULTISIGS, CATEGORIES, BUDGETS, BUDGET_TOTALS,
     FETCH_INTERVAL_MINUTES, TOKEN_COINGECKO_IDS,
-    BUDGET_OVERRIDES,
+    BUDGET_OVERRIDES, SIGNER_ALIASES,
 )
 from models import get_db, init_db, seed_wallets, close_db
 from fetcher import fetch_all, fetch_single_wallet
@@ -325,7 +325,14 @@ def api_transactions(wallet_id):
         })
 
 
-    return jsonify({"transactions": txs, "total": total, "limit": limit, "offset": offset})
+    aliases = SIGNER_ALIASES.get(wallet_id, {})
+    return jsonify({
+        "transactions": txs,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "signer_aliases": aliases,
+    })
 
 
 # ── Categorise Transaction (auth required) ───────────────────────────────

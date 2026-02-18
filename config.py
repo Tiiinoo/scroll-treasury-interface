@@ -75,6 +75,20 @@ MULTISIGS = {
 }
 
 # ---------------------------------------------------------------------------
+# Signer Aliases (Address -> Name)
+# ---------------------------------------------------------------------------
+SIGNER_ALIASES = {
+    "treasury": {
+        "0x73506528332BEcf6121F71AC9aaD43646a41994C": "SEEDGov",
+        "0x66a47ea84e604451CfaC2CA6559bd9a2dE1c6504": "Ethereum TGU",
+        "0x558581b0345D986bA5bD6f04Efd27e2a5B991320": "Scroll Foundation",
+        "0x1Da431d2D5ECA4Df735F69fB5ea10c8E630b8f50": "Scroll Foundation",
+        "0xbc72d9f10F6626271092764467983122cF15E3f4": "Accountability"
+    }
+}
+
+
+# ---------------------------------------------------------------------------
 # Expense Categories per Multisig
 # ---------------------------------------------------------------------------
 CATEGORIES = {

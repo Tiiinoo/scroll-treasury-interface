@@ -26,6 +26,7 @@ let state = {
     budgetCurrency: 'USD',
     prices: { ETH: 0, SCR: 0 },
     budgetComp: null,
+    signerAliases: {},
 };
 
 const CATEGORY_COLOURS = [
@@ -91,6 +92,11 @@ async function loadTransactions(walletId) {
     const data = await api(`/api/transactions/${walletId}?${params}`);
     state.transactions.items = data.transactions;
     state.transactions.total = data.total;
+    if (data.signer_aliases) {
+        state.signerAliases = data.signer_aliases;
+    } else {
+        state.signerAliases = {};
+    }
 }
 
 async function loadBudgetComparison(walletId) {
@@ -737,7 +743,10 @@ function formatSigners(signersStr) {
     const signers = signersStr.split(',');
 
     // Helper to generate signer link
-    const makeLink = addr => `<a href="https://scrollscan.com/address/${addr}" target="_blank" rel="noopener" class="signer-addr tx-hash" style="display:block; margin-bottom:2px;">${shortenAddr(addr)}</a>`;
+    const makeLink = addr => {
+        const name = state.signerAliases[addr] || shortenAddr(addr);
+        return `<a href="https://scrollscan.com/address/${addr}" target="_blank" rel="noopener" class="signer-addr tx-hash" style="display:block; margin-bottom:2px;">${name}</a>`;
+    };
 
     // If many signers (more than 4), collapse them
     if (signers.length > 4) {
