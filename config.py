@@ -87,6 +87,7 @@ CATEGORIES = {
         "Community Allocation",
         "Ecosystem Allocation",
         "Internal Operations",
+        "Incoming Transaction",
     ],
     "committee": [
         "Uncategorised",
@@ -97,18 +98,21 @@ CATEGORIES = {
         "Accountability Operator",
         "Karma Gap Subscription",
         "Internal Operations",
+        "Incoming Transaction",
     ],
     "delegates": [
         "Uncategorised",
         "Governance Contribution Recognition",
         "Delegate Contributions Programme",
         "Internal Operations",
+        "Incoming Transaction",
     ],
     "community": [
         "Uncategorised",
         "Local Nodes",
         "Community Support Programme",
         "Internal Operations",
+        "Incoming Transaction",
     ],
     "ecosystem": [
         "Uncategorised",
@@ -116,6 +120,7 @@ CATEGORIES = {
         "Creator Fund",
         "Security Subsidy Programme",
         "Internal Operations",
+        "Incoming Transaction",
     ],
 }
 
