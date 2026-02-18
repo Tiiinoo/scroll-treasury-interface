@@ -12,7 +12,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from models import get_db
-from config import SCROLLSCAN_API_BASE, SCROLLSCAN_API_KEY, SCROLL_CHAIN_ID, MULTISIGS
+from config import SCROLLSCAN_API_BASE, SCROLLSCAN_API_KEY, SCROLL_CHAIN_ID, MULTISIGS, TOKEN_COINGECKO_IDS
 
 # Safe Transaction Service API for Scroll
 SAFE_API_BASE = "https://safe-transaction-scroll.safe.global/api/v1"
@@ -422,16 +422,8 @@ def fetch_historical_prices():
 
     logger.info("Need to fetch %d historical prices...", len(rows))
     
-    # CoinGecko ID mapping (basic)
-    cg_ids = {
-        "ETH": "ethereum",
-        "WETH": "weth",
-        "SCR": "scroll",
-        "USDC": "usd-coin",
-        "USDT": "tether",
-        "DAI": "dai",
-        "WBTC": "bitcoin",
-    }
+    # CoinGecko ID mapping (from config)
+    cg_ids = TOKEN_COINGECKO_IDS
 
     # Group by symbol to batch/manage
     by_symbol = {}

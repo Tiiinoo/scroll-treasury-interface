@@ -25,6 +25,19 @@ SCROLL_CHAIN_ID = 534352
 FETCH_INTERVAL_MINUTES = int(os.environ.get("FETCH_INTERVAL_MINUTES", "15"))
 
 # ---------------------------------------------------------------------------
+# Token CoinGecko IDs
+# ---------------------------------------------------------------------------
+TOKEN_COINGECKO_IDS = {
+    "ETH": "ethereum",
+    "WETH": "weth",
+    "SCR": "scroll",
+    "USDC": "usd-coin",
+    "USDT": "tether",
+    "DAI": "dai",
+    "WBTC": "bitcoin",
+}
+
+# ---------------------------------------------------------------------------
 # Authentication (simple username / password for categorisation interface)
 # ---------------------------------------------------------------------------
 AUTH_USERNAME = os.environ.get("AUTH_USERNAME")

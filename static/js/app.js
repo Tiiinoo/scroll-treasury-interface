@@ -278,7 +278,9 @@ function renderBalances(balances) {
     // Helper for logos
     const getLogo = (symbol, address) => {
         if (symbol === 'SCR') return '/static/img/Scroll_Logomark.ad5d0348.svg';
-        if (symbol === 'ETH') return 'https://assets.coingecko.com/coins/images/279/small/ethereum.png';
+        if (symbol === 'ETH' || symbol === 'WETH') return 'https://assets.coingecko.com/coins/images/279/small/ethereum.png';
+        if (symbol === 'USDT') return 'https://assets.coingecko.com/coins/images/325/small/Tether.png';
+        if (symbol === 'USDC') return 'https://assets.coingecko.com/coins/images/6319/small/usdc.png';
         if (address) {
             // Try TrustWallet mainnet mapping for now, or a generic placeholder
             return `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/${address}/logo.png`;

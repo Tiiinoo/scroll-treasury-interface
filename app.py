@@ -30,7 +30,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from config import (
     SECRET_KEY, AUTH_USERNAME, AUTH_PASSWORD,
     MULTISIGS, CATEGORIES, BUDGETS, BUDGET_TOTALS,
-    FETCH_INTERVAL_MINUTES,
+    FETCH_INTERVAL_MINUTES, TOKEN_COINGECKO_IDS,
 )
 from models import get_db, init_db, seed_wallets, close_db
 from fetcher import fetch_all, fetch_single_wallet
@@ -125,8 +125,11 @@ def get_token_prices() -> Dict[str, float]:
         
     try:
         # DefiLlama API (no strict rate limits on server IPs)
-        # using coingecko IDs: scroll, ethereum
-        url = "https://coins.llama.fi/prices/current/coingecko:scroll,coingecko:ethereum?searchWidth=4h"
+        # Construct comma-separated list of coingecko IDs
+        cg_ids = [f"coingecko:{mid}" for mid in TOKEN_COINGECKO_IDS.values()]
+        ids_str = ",".join(cg_ids)
+        
+        url = f"https://coins.llama.fi/prices/current/{ids_str}?searchWidth=4h"
         
         # Add User-Agent just in case
         headers = {
@@ -138,10 +141,10 @@ def get_token_prices() -> Dict[str, float]:
         
         coins = data.get("coins", {})
         
-        prices = {
-            "ETH": coins.get("coingecko:ethereum", {}).get("price", 0),
-            "SCR": coins.get("coingecko:scroll", {}).get("price", 0),
-        }
+        prices = {}
+        for symbol, cg_id in TOKEN_COINGECKO_IDS.items():
+            key = f"coingecko:{cg_id}"
+            prices[symbol] = coins.get(key, {}).get("price", 0)
         
         PRICE_CACHE["timestamp"] = now
         PRICE_CACHE["prices"] = prices
