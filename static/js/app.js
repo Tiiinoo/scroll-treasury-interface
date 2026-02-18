@@ -601,7 +601,7 @@ function renderTransactionsTable() {
             notesCell = `<input type="text" class="tx-note-input" value="${escapeHtml(tx.notes)}" 
                 onblur="updateTxNote(${tx.id}, this.value)" placeholder="Add note..." style="width:100%; min-width:120px;">`;
         } else {
-            notesCell = `<span class="tx-note-text">${escapeHtml(tx.notes)}</span>`;
+            notesCell = `<span class="tx-note-text" title="${escapeHtml(tx.notes)}">${escapeHtml(tx.notes)}</span>`;
         }
 
         const signersHtml = formatSigners(tx.signers);
