@@ -412,7 +412,7 @@ function renderBudgetComparison(budgetComp) {
     // Group categories - ensure Operations comes first, then Programmes
     // Use groups from API if available, else fallback to hardcoded (or just use keys)
     // The API now returns 'groups' in order
-    const groupOrder = budgetComp.groups || ['Operations', 'Programmes', 'Community Pool', 'Delegates', 'Other'];
+    const groupOrder = budgetComp.groups || ['Operations', 'Ecosystem Programmes', 'Community Programmes', 'Delegate Incentive Programmes', 'Other'];
     const groups = {};
     budgetComp.categories.forEach(c => {
         const g = c.group || 'Other';
@@ -462,7 +462,7 @@ function renderBudgetComparison(budgetComp) {
                         items: [],
                         limit: c.budget_semester,
                         spent: 0,
-                        name: c.shared_id === 'ecosystem_pool' ? 'Ecosystem Shared Pool' : (groupName === 'Community Pool' ? 'Community Shared Pool' : 'Shared Pool')
+                        name: c.shared_id === 'ecosystem_pool' ? 'Ecosystem Shared Pool' : (c.shared_id === 'community_pool' ? 'Community Shared Pool' : 'Shared Pool')
                     };
                 }
                 sharedGroups[c.shared_id].items.push(c);

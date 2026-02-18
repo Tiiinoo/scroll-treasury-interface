@@ -92,8 +92,9 @@ CATEGORIES = {
     "committee": [
         "Uncategorised",
         "Governance Facilitator",
-        "Program Coordination",
+        "Programme Coordination",
         "Marketing Operator",
+        "Operations Committee Discretionary Budget",
         "Accountability Lead",
         "Accountability Operator",
         "Karma Gap Subscription",
@@ -157,61 +158,63 @@ BUDGETS = {
     "Governance Contribution Recognition": {
         "quarterly": 0,
         "semester": 72_000,
-        "group": "Delegates",
+        "group": "Delegate Incentive Programmes",
     },
     "Delegate Contributions Programme": {
         "quarterly": 0,
         "semester": 48_000,
-        "group": "Delegates",
+        "group": "Delegate Incentive Programmes",
     },
-    # Committee Roles
-    "Governance Facilitator": { "quarterly": 0, "semester": 30_000, "group": "Operations" },
-    "Program Coordination": { "quarterly": 0, "semester": 30_000, "group": "Operations" },
-    "Marketing Operator": { "quarterly": 0, "semester": 30_000, "group": "Operations" },
-    "Accountability Lead": { "quarterly": 0, "semester": 30_000, "group": "Operations" },
-    "Accountability Operator": { "quarterly": 0, "semester": 18_000, "group": "Operations" },
-    "Karma Gap Subscription": { "quarterly": 0, "semester": 12_000, "group": "Operations" },
+    # Operations Committee
+    "Governance Facilitator": { "quarterly": 0, "semester": 30_000, "group": "Operations Committee" },
+    "Programme Coordination": { "quarterly": 0, "semester": 30_000, "group": "Operations Committee" },
+    "Marketing Operator": { "quarterly": 0, "semester": 30_000, "group": "Operations Committee" },
+
+    # Accountability Committee
+    "Accountability Lead": { "quarterly": 0, "semester": 30_000, "group": "Accountability Committee" },
+    "Accountability Operator": { "quarterly": 0, "semester": 18_000, "group": "Accountability Committee" },
+    "Karma Gap Subscription": { "quarterly": 0, "semester": 12_000, "group": "Accountability Committee" },
     # Programmes
     "Community Allocation": {
         "quarterly": 80_000,
         "semester": 160_000,
-        "group": "Programmes",
+        "group": "Ecosystem Programmes",
     },
     "Ecosystem Allocation": {
         "quarterly": 100_000,
         "semester": 200_000,
-        "group": "Programmes",
+        "group": "Ecosystem Programmes",
     },
     # Ecosystem Shared Pool
     "Founder Enablement Fund": {
         "quarterly": 0,
         "semester": 200_000,
-        "group": "Programmes",
+        "group": "Ecosystem Programmes",
         "shared_id": "ecosystem_pool",
     },
     "Creator Fund": {
         "quarterly": 0,
         "semester": 200_000,
-        "group": "Programmes",
+        "group": "Ecosystem Programmes",
         "shared_id": "ecosystem_pool",
     },
     "Security Subsidy Programme": {
         "quarterly": 0,
         "semester": 200_000,
-        "group": "Programmes",
+        "group": "Ecosystem Programmes",
         "shared_id": "ecosystem_pool",
     },
     # Community Shared Pool
     "Local Nodes": {
         "quarterly": 0,
         "semester": 160_000,
-        "group": "Community Pool",
+        "group": "Community Programmes",
         "shared_id": "community_pool",
     },
     "Community Support Programme": {
         "quarterly": 0,
         "semester": 160_000,
-        "group": "Community Pool",
+        "group": "Community Programmes",
         "shared_id": "community_pool",
     },
 }
@@ -226,4 +229,13 @@ BUDGET_TOTALS = {
     "community": { "quarterly": 80_000, "semester": 160_000 },
     "delegates": { "quarterly": 60_000, "semester": 120_000 },
     "ecosystem": { "quarterly": 100_000, "semester": 200_000 },
+}
+
+# ---------------------------------------------------------------------------
+# Budget Overrides (Context-specific)
+# ---------------------------------------------------------------------------
+BUDGET_OVERRIDES = {
+    "committee": {
+        "Operations Committee Discretionary Budget": { "group": "Operations Committee" }
+    }
 }

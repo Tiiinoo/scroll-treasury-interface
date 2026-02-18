@@ -31,6 +31,7 @@ from config import (
     SECRET_KEY, AUTH_USERNAME, AUTH_PASSWORD,
     MULTISIGS, CATEGORIES, BUDGETS, BUDGET_TOTALS,
     FETCH_INTERVAL_MINUTES, TOKEN_COINGECKO_IDS,
+    BUDGET_OVERRIDES,
 )
 from models import get_db, init_db, seed_wallets, close_db
 from fetcher import fetch_all, fetch_single_wallet
@@ -577,7 +578,12 @@ def api_budget_comparison(wallet_id):
     for cat in categories:
         if cat == "Uncategorised":
             continue
-        budget = BUDGETS.get(cat, {})
+        
+        # Check for override first
+        base_budget = BUDGETS.get(cat, {})
+        override = BUDGET_OVERRIDES.get(wallet_id, {}).get(cat, {})
+        # Merge override into base (shallow merge is fine for our structure)
+        budget = {**base_budget, **override}
         
         spent_usd = 0
         spent_scr = 0
