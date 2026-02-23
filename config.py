@@ -141,108 +141,116 @@ CATEGORIES = {
 
 
 # ---------------------------------------------------------------------------
-# Budget Allocations – Semester-Based
-# Structure: { category_name: { "quarterly": amount, "semester": amount, "group": group_name } }
-# All amounts in USD
+# Budget Allocations
+# Structure: { category_name: { "quarterly": amount, "group": group_name, "currency": "USD" | "SCR", "tooltip": "..." } }
+# Unless specified, amounts are in USD.
 # ---------------------------------------------------------------------------
 BUDGETS = {
     # Operations (in order: Committee, Delegates, Discretionary, General Purpose)
     "Operations & Accountability Committee": {
         "quarterly": 75_000,
-        "semester": 150_000,
         "group": "Operations",
+        "currency": "USD",
     },
     "Delegates Incentives": {
         "quarterly": 60_000,
-        "semester": 120_000,
         "group": "Operations",
+        "currency": "USD",
     },
     "Operations Committee Discretionary Budget": {
-        "quarterly": 5_000,
-        "semester": 10_000,
+        "quarterly": 61576.35,
         "group": "Operations",
+        "currency": "SCR",
+        "tooltip": "Originally approved as $5k/quarter, calculated at $0.0812 TWAP from January 6, when the budget proposal was approved.",
     },
     #DAO Initiatives
     "General Purpose DAO Budget": {
-        "quarterly": 60_000,
-        "semester": 120_000,
+        "quarterly": 738916.26,
         "group": "DAO Initiatives",
+        "currency": "SCR",
+        "tooltip": "Originally approved as $60k/quarter, calculated at $0.0812 TWAP from January 6, when the budget proposal was approved.",
     },
     # Delegates
     "Governance Contribution Recognition": {
-        "quarterly": 0,
-        "semester": 72_000,
+        "quarterly": 36_000,
         "group": "Delegate Incentive Programmes",
+        "currency": "USD",
     },
     "Delegate Contributions Programme": {
-        "quarterly": 0,
-        "semester": 48_000,
+        "quarterly": 24_000,
         "group": "Delegate Incentive Programmes",
+        "currency": "USD",
     },
     # Operations Committee
-    "Governance Facilitator": { "quarterly": 0, "semester": 30_000, "group": "Operations Committee" },
-    "Programme Coordination": { "quarterly": 0, "semester": 30_000, "group": "Operations Committee" },
-    "Marketing Operator": { "quarterly": 0, "semester": 30_000, "group": "Operations Committee" },
+    "Governance Facilitator": { "quarterly": 15_000, "group": "Operations Committee", "currency": "USD" },
+    "Programme Coordination": { "quarterly": 15_000, "group": "Operations Committee", "currency": "USD" },
+    "Marketing Operator": { "quarterly": 15_000, "group": "Operations Committee", "currency": "USD" },
 
     # Accountability Committee
-    "Accountability Lead": { "quarterly": 0, "semester": 30_000, "group": "Accountability Committee" },
-    "Accountability Operator": { "quarterly": 0, "semester": 18_000, "group": "Accountability Committee" },
-    "Karma Gap Subscription": { "quarterly": 0, "semester": 12_000, "group": "Accountability Committee" },
+    "Accountability Lead": { "quarterly": 15_000, "group": "Accountability Committee", "currency": "USD" },
+    "Accountability Operator": { "quarterly": 9_000, "group": "Accountability Committee", "currency": "USD" },
+    "Karma Gap Subscription": { "quarterly": 6_000, "group": "Accountability Committee", "currency": "USD" },
     # Programmes
     "Community Allocation": {
-        "quarterly": 80_000,
-        "semester": 160_000,
+        "quarterly": 985221.67,
         "group": "Ecosystem Programmes",
+        "currency": "SCR",
+        "tooltip": "Originally approved as $80k/quarter, calculated at $0.0812 TWAP from January 6, when the budget proposal was approved.",
     },
     "Ecosystem Allocation": {
-        "quarterly": 100_000,
-        "semester": 200_000,
+        "quarterly": 1231527.09,
         "group": "Ecosystem Programmes",
+        "currency": "SCR",
+        "tooltip": "Originally approved as $100k/quarter, calculated at $0.0812 TWAP from January 6, when the budget proposal was approved.",
     },
     # Ecosystem Shared Pool
     "Founder Enablement Fund": {
-        "quarterly": 0,
-        "semester": 200_000,
+        "quarterly": 1231527.09,
         "group": "Ecosystem Programmes",
         "shared_id": "ecosystem_pool",
+        "currency": "SCR",
+        "tooltip": "Originally approved as $100k/quarter, calculated at $0.0812 TWAP from January 6, when the budget proposal was approved.",
     },
     "Creator Fund": {
-        "quarterly": 0,
-        "semester": 200_000,
+        "quarterly": 1231527.09,
         "group": "Ecosystem Programmes",
         "shared_id": "ecosystem_pool",
+        "currency": "SCR",
+        "tooltip": "Originally approved as $100k/quarter, calculated at $0.0812 TWAP from January 6, when the budget proposal was approved.",
     },
     "Security Subsidy Programme": {
-        "quarterly": 0,
-        "semester": 200_000,
+        "quarterly": 1231527.09,
         "group": "Ecosystem Programmes",
         "shared_id": "ecosystem_pool",
+        "currency": "SCR",
+        "tooltip": "Originally approved as $100k/quarter, calculated at $0.0812 TWAP from January 6, when the budget proposal was approved.",
     },
     # Community Shared Pool
     "Local Nodes": {
-        "quarterly": 0,
-        "semester": 160_000,
+        "quarterly": 985221.67,
         "group": "Community Programmes",
         "shared_id": "community_pool",
+        "currency": "SCR",
+        "tooltip": "Originally approved as $80k/quarter, calculated at $0.0812 TWAP from January 6, when the budget proposal was approved.",
     },
     "Community Support Programme": {
-        "quarterly": 0,
-        "semester": 160_000,
+        "quarterly": 985221.67,
         "group": "Community Programmes",
         "shared_id": "community_pool",
+        "currency": "SCR",
+        "tooltip": "Originally approved as $80k/quarter, calculated at $0.0812 TWAP from January 6, when the budget proposal was approved.",
     },
 }
 
 # Totals (for quick reference)
 BUDGET_TOTALS = {
     "quarterly": 380_000, # Backwards compatibility
-    "semester": 760_000,  # Backwards compatibility
-    "default": { "quarterly": 380_000, "semester": 760_000 }, # Fallback/Original
-    "treasury": { "quarterly": 380_000, "semester": 760_000 },
-    "committee": { "quarterly": 75_000, "semester": 150_000 },
-    "community": { "quarterly": 80_000, "semester": 160_000 },
-    "delegates": { "quarterly": 60_000, "semester": 120_000 },
-    "ecosystem": { "quarterly": 100_000, "semester": 200_000 },
+    "default": { "quarterly": 380_000 }, # Fallback/Original
+    "treasury": { "quarterly": 380_000 },
+    "committee": { "quarterly": 75_000 },
+    "community": { "quarterly": 80_000 },
+    "delegates": { "quarterly": 60_000 },
+    "ecosystem": { "quarterly": 100_000 },
 }
 
 # ---------------------------------------------------------------------------

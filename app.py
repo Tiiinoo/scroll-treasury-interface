@@ -613,23 +613,47 @@ def api_budget_comparison(wallet_id):
 
         # Helper to avoid linter confusion
         budget_q = float(budget.get("quarterly", 0))
-        budget_s = float(budget.get("semester", 0))
 
         result.append({
             "category": cat,
             "spent_usd": spent_usd,
             "spent_scr": spent_scr,
             "budget_quarterly": budget_q,
-            "budget_semester": budget_s,
             "group": budget.get("group", "Other"),
             "shared_id": budget.get("shared_id"),
+            "currency": budget.get("currency", "USD"),
+            "tooltip": budget.get("tooltip"),
         })
 
 
 
-    # Overall totals
+    # Overall totals - Original blended logic
     total_spent = sum(r["spent_usd"] for r in result)
     total_spent_scr = sum(r["spent_scr"] for r in result)
+
+    # Calculate explicit totals based on the native currency of the budget
+    total_spent_usd_native = sum(r["spent_usd"] for r in result if r.get("currency") == "USD")
+    total_spent_scr_native = sum(r["spent_scr"] for r in result if r.get("currency") == "SCR")
+    
+    # Calculate unique budget limits to avoid multiplying shared pools
+    total_budget_usd = 0
+    total_budget_scr = 0
+    seen_shared_ids = set()
+    
+    for r in result:
+        currency = r.get("currency", "USD")
+        limit = r["budget_quarterly"]
+        shared_id = r.get("shared_id")
+        
+        if shared_id:
+            if shared_id in seen_shared_ids:
+                continue
+            seen_shared_ids.add(shared_id)
+            
+        if currency == "USD":
+            total_budget_usd += limit
+        elif currency == "SCR":
+            total_budget_scr += limit
 
     # Get wallet specific totals
     wallet_totals = BUDGET_TOTALS.get(wallet_id, BUDGET_TOTALS.get("default", BUDGET_TOTALS)) # type: ignore
@@ -653,8 +677,11 @@ def api_budget_comparison(wallet_id):
         "totals": {
             "spent": total_spent,
             "spent_scr": total_spent_scr,
+            "spent_usd_native": total_spent_usd_native,
+            "spent_scr_native": total_spent_scr_native,
             "budget_quarterly": wallet_totals.get("quarterly", 0),
-            "budget_semester": wallet_totals.get("semester", 0),
+            "budget_usd": total_budget_usd,
+            "budget_scr": total_budget_scr,
         },
         "groups": groups_list, 
     })

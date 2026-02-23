@@ -231,10 +231,6 @@ function renderDashboard(budgetComp) {
         <div class="section">
             <div class="section-header">
                 <h2 class="section-title">Budget vs Spent</h2>
-                <div class="currency-toggle">
-                    <button class="currency-btn ${state.budgetCurrency === 'USD' ? 'active' : ''}" onclick="toggleBudgetCurrency('USD')">USD</button>
-                    <button class="currency-btn ${state.budgetCurrency === 'SCR' ? 'active' : ''}" onclick="toggleBudgetCurrency('SCR')">SCR</button>
-                </div>
             </div>
             ${renderBudgetComparison(budgetComp)}
         </div>
@@ -413,7 +409,6 @@ function renderBudgetComparison(budgetComp) {
     }
 
     const totals = budgetComp.totals;
-    const totalPct = totals.budget_semester > 0 ? (totals.spent / totals.budget_semester * 100) : 0;
 
     // Group categories - ensure Operations comes first, then Programmes
     // Use groups from API if available, else fallback to hardcoded (or just use keys)
@@ -426,29 +421,59 @@ function renderBudgetComparison(budgetComp) {
         groups[g].push(c);
     });
 
+    let html = `<div class="budget-summary" style="display:flex; gap:16px; margin-bottom:16px; flex-wrap:wrap">`;
 
-    let html = `
-    <div class="budget-summary">
-        <div class="budget-summary-item">
-            <div class="budget-summary-label">Quarterly Budget</div>
-            <div class="budget-summary-value" style="color:var(--accent-scroll)">
-                ${state.budgetCurrency === 'SCR' ? `${formatNumber(totals.budget_quarterly / (state.prices.SCR || 1))} SCR` : `$${formatNumber(totals.budget_quarterly)}`}
+    // Render USD Summary if applicable
+    if (totals.budget_usd > 0 || totals.spent_usd_native > 0) {
+        const usdPct = totals.budget_usd > 0 ? (totals.spent_usd_native / totals.budget_usd * 100) : 0;
+        html += `
+        <div class="budget-summary-item" style="flex:1; min-width:250px; background:var(--bg-card); padding:20px; border-radius:12px; border:1px solid var(--border-color);">
+            <div style="font-weight:700; font-size:14px; color:var(--text-muted); margin-bottom:16px; text-transform:uppercase; letter-spacing:0.5px">Fiat Budgets (USDT)</div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:12px">
+                <div>
+                    <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Quarterly Limit</div>
+                    <div style="font-size:18px; font-weight:700; color:var(--accent-scroll)">$${formatNumber(totals.budget_usd)}</div>
+                </div>
+                <div style="text-align:right">
+                    <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total Spent</div>
+                    <div style="font-size:18px; font-weight:700; color:${usdPct > 90 ? 'var(--accent-red)' : 'var(--accent-green)'}">$${formatNumber(totals.spent_usd_native)}</div>
+                </div>
             </div>
-        </div>
-        <div class="budget-summary-item">
-            <div class="budget-summary-label">Semester Budget</div>
-            <div class="budget-summary-value" style="color:var(--accent-scroll)">
-                ${state.budgetCurrency === 'SCR' ? `${formatNumber(totals.budget_semester / (state.prices.SCR || 1))} SCR` : `$${formatNumber(totals.budget_semester)}`}
+        </div>`;
+    }
+
+    // Render SCR Summary if applicable
+    if (totals.budget_scr > 0 || totals.spent_scr_native > 0) {
+        const scrPct = totals.budget_scr > 0 ? (totals.spent_scr_native / totals.budget_scr * 100) : 0;
+
+        // Dynamic tooltip based on the active wallet
+        const scrTooltips = {
+            "treasury": "Originally approved as $245k/quarter, calculated at $0.0812 TWAP from January 6, when the budget proposals were approved.",
+            "committee": "Originally approved as $5k/quarter, calculated at $0.0812 TWAP from January 6, when the budget proposals were approved.",
+            "ecosystem": "Originally approved as $100k/quarter, calculated at $0.0812 TWAP from January 6, when the budget proposals were approved.",
+            "community": "Originally approved as $80k/quarter, calculated at $0.0812 TWAP from January 6, when the budget proposals were approved."
+        };
+        const totalScrTooltip = scrTooltips[state.activeWallet] || "Calculated at $0.0812 TWAP from January 6.";
+
+        html += `
+        <div class="budget-summary-item" style="flex:1; min-width:250px; background:var(--bg-card); padding:20px; border-radius:12px; border:1px solid var(--border-color);">
+            <div style="font-weight:700; font-size:14px; color:var(--text-muted); margin-bottom:16px; text-transform:uppercase; letter-spacing:0.5px">
+                Token Budgets (SCR) <span class="tooltip-icon" title="${totalScrTooltip}">ⓘ</span>
             </div>
-        </div>
-        <div class="budget-summary-item">
-            <div class="budget-summary-label">Total Spent</div>
-            <div class="budget-summary-value" style="color:${totalPct > 90 ? 'var(--accent-red)' : 'var(--accent-green)'}">
-                ${state.budgetCurrency === 'SCR' ? `${formatNumber(totals.spent_scr || 0)} SCR` : `$${formatNumber(totals.spent)}`}
+            <div style="display:flex; justify-content:space-between; margin-bottom:12px">
+                <div>
+                    <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Quarterly Limit</div>
+                    <div style="font-size:18px; font-weight:700; color:var(--accent-scroll)">${formatNumber(totals.budget_scr)} SCR</div>
+                </div>
+                <div style="text-align:right">
+                    <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total Spent</div>
+                    <div style="font-size:18px; font-weight:700; color:${scrPct > 90 ? 'var(--accent-red)' : 'var(--accent-green)'}">${formatNumber(totals.spent_scr_native)} SCR</div>
+                </div>
             </div>
-        </div>
-    </div>
-    <div class="card"><div class="card-body">`;
+        </div>`;
+    }
+
+    html += `</div><div class="card"><div class="card-body">`;
 
     // Iterate in order
     groupOrder.forEach(groupName => {
@@ -466,9 +491,12 @@ function renderBudgetComparison(budgetComp) {
                 if (!sharedGroups[c.shared_id]) {
                     sharedGroups[c.shared_id] = {
                         items: [],
-                        limit: c.budget_semester,
+                        limit: c.budget_quarterly,
                         spent: 0,
-                        name: c.shared_id === 'ecosystem_pool' ? 'Ecosystem Shared Pool' : (c.shared_id === 'community_pool' ? 'Community Shared Pool' : 'Shared Pool')
+                        spent_scr: 0,
+                        name: c.shared_id === 'ecosystem_pool' ? 'Ecosystem Shared Pool' : (c.shared_id === 'community_pool' ? 'Community Shared Pool' : 'Shared Pool'),
+                        currency: c.currency,
+                        tooltip: c.tooltip
                     };
                 }
                 sharedGroups[c.shared_id].items.push(c);
@@ -482,16 +510,19 @@ function renderBudgetComparison(budgetComp) {
 
         // Render Shared Pools
         Object.values(sharedGroups).forEach(pool => {
-            const pct = pool.limit > 0 ? Math.min((pool.spent / pool.limit) * 100, 150) : 0;
+            const spentAmt = pool.currency === 'SCR' ? pool.spent_scr : pool.spent;
+            const pct = pool.limit > 0 ? Math.min((spentAmt / pool.limit) * 100, 150) : 0;
             const fillClass = pct > 100 ? 'over' : pct > 75 ? 'warning' : 'under';
+
+            const tooltipHtml = pool.tooltip ? `<span class="tooltip-icon-category" title="${escapeHtml(pool.tooltip)}">ⓘ</span>` : '';
 
             html += `
             <div class="budget-item shared-pool">
                 <div class="budget-label">
-                    <span class="budget-name" style="font-weight:700">${pool.name}</span>
-                    <span class="budget-amounts">${state.budgetCurrency === 'SCR' ?
-                    `${formatNumber(pool.spent_scr)} SCR / ${formatNumber(pool.limit / (state.prices.SCR || 1))} SCR semester` :
-                    `$${formatNumber(pool.spent)} / $${formatNumber(pool.limit)} semester`}</span>
+                    <span class="budget-name" style="font-weight:700">${pool.name} ${tooltipHtml}</span>
+                    <span class="budget-amounts">${pool.currency === 'SCR' ?
+                    `${formatNumber(pool.spent_scr)} SCR / ${formatNumber(pool.limit)} SCR` :
+                    `$${formatNumber(pool.spent)} / $${formatNumber(pool.limit)}`}</span>
                 </div>
                 <div class="budget-bar">
                     <div class="budget-fill ${fillClass}" style="width:${Math.min(pct, 100)}%"></div>
@@ -501,7 +532,7 @@ function renderBudgetComparison(budgetComp) {
                     ${pool.items.map(i => `
                         <div style="display:flex; justify-content:space-between">
                             <span>${i.category}</span>
-                            <span>${state.budgetCurrency === 'SCR' ? `${formatNumber(i.spent_scr)} SCR` : `$${formatNumber(i.spent_usd)}`}</span>
+                            <span>${i.currency === 'SCR' ? `${formatNumber(i.spent_scr)} SCR` : `$${formatNumber(i.spent_usd)}`}</span>
                         </div>
                     `).join('')}
                 </div>
@@ -510,15 +541,19 @@ function renderBudgetComparison(budgetComp) {
 
         // Render Individual Items
         individualItems.forEach(c => {
-            const pct = c.budget_semester > 0 ? Math.min((c.spent_usd / c.budget_semester) * 100, 150) : 0;
+            const spentAmt = c.currency === 'SCR' ? (c.spent_scr || 0) : c.spent_usd;
+            const pct = c.budget_quarterly > 0 ? Math.min((spentAmt / c.budget_quarterly) * 100, 150) : 0;
             const fillClass = pct > 100 ? 'over' : pct > 75 ? 'warning' : 'under';
+
+            const tooltipHtml = c.tooltip ? `<span class="tooltip-icon-category" title="${escapeHtml(c.tooltip)}">ⓘ</span>` : '';
+
             html += `
             <div class="budget-item">
                 <div class="budget-label">
-                    <span class="budget-name">${c.category}</span>
-                    <span class="budget-amounts">${state.budgetCurrency === 'SCR' ?
-                    `${formatNumber(c.spent_scr || 0)} SCR / ${formatNumber(c.budget_semester / (state.prices.SCR || 1))} SCR semester` :
-                    `$${formatNumber(c.spent_usd)} / $${formatNumber(c.budget_semester)} semester`}</span>
+                    <span class="budget-name">${c.category} ${tooltipHtml}</span>
+                    <span class="budget-amounts">${c.currency === 'SCR' ?
+                    `${formatNumber(c.spent_scr || 0)} SCR / ${formatNumber(c.budget_quarterly)} SCR` :
+                    `$${formatNumber(c.spent_usd)} / $${formatNumber(c.budget_quarterly)}`}</span>
                 </div>
                 <div class="budget-bar">
                     <div class="budget-fill ${fillClass}" style="width:${Math.min(pct, 100)}%"></div>

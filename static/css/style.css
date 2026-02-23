@@ -950,6 +950,34 @@ body {
 
 /* ── Tooltip ──────────────────────────────────────────────────────────── */
 
+.tooltip-icon {
+    font-size: 11px;
+    vertical-align: middle;
+    color: var(--text-muted);
+    cursor: help;
+    margin-left: 4px;
+    opacity: 0.8;
+}
+
+.tooltip-icon:hover {
+    color: var(--text-secondary);
+    opacity: 1;
+}
+
+.tooltip-icon-category {
+    font-size: 13px;
+    vertical-align: middle;
+    color: var(--text-muted);
+    cursor: help;
+    margin-left: 4px;
+    opacity: 0.8;
+}
+
+.tooltip-icon-category:hover {
+    opacity: 1;
+    color: var(--text-secondary);
+}
+
 .tooltip {
     position: relative;
 }
