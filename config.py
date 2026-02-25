@@ -111,7 +111,6 @@ CATEGORIES = {
         "Operations Committee Discretionary Budget",
         "Accountability Lead",
         "Accountability Operator",
-        "Karma Gap Subscription",
         "Internal Operations",
         "Incoming Transaction",
     ],
@@ -148,7 +147,7 @@ CATEGORIES = {
 BUDGETS = {
     # Operations (in order: Committee, Delegates, Discretionary, General Purpose)
     "Operations & Accountability Committee": {
-        "quarterly": 75_000,
+        "quarterly": 69_000,
         "group": "Operations",
         "currency": "USD",
     },
@@ -189,7 +188,6 @@ BUDGETS = {
     # Accountability Committee
     "Accountability Lead": { "quarterly": 15_000, "group": "Accountability Committee", "currency": "USD" },
     "Accountability Operator": { "quarterly": 9_000, "group": "Accountability Committee", "currency": "USD" },
-    "Karma Gap Subscription": { "quarterly": 6_000, "group": "Accountability Committee", "currency": "USD" },
     # Programmes
     "Community Allocation": {
         "quarterly": 985221.67,
@@ -244,10 +242,10 @@ BUDGETS = {
 
 # Totals (for quick reference)
 BUDGET_TOTALS = {
-    "quarterly": 380_000, # Backwards compatibility
-    "default": { "quarterly": 380_000 }, # Fallback/Original
-    "treasury": { "quarterly": 380_000 },
-    "committee": { "quarterly": 75_000 },
+    "quarterly": 374_000, # Backwards compatibility
+    "default": { "quarterly": 374_000 }, # Fallback/Original
+    "treasury": { "quarterly": 374_000 },
+    "committee": { "quarterly": 69_000 },
     "community": { "quarterly": 80_000 },
     "delegates": { "quarterly": 60_000 },
     "ecosystem": { "quarterly": 100_000 },
