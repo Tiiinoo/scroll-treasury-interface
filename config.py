@@ -54,22 +54,22 @@ MULTISIGS = {
     },
     "committee": {
         "name": "Operations & Accountability Committee Multisig",
-        "address": "0x4cb06982dD097633426cf32038D9f1182a9aDA0c",
-        "description": "Coommittee's expenses",
+        "address": "0xd0D05390D922a2C45A70EAA4601600F236C02AcC",
+        "description": "Committee's expenses",
     },
     "delegates": {
         "name": "Delegates Incentives Multisig",
-        "address": "0x4cb06982dD097633426cf32038D9f1182a9aDA0c",
+        "address": "0x7964E7BF48948c9e1d89f419caD8EF7D8d8F0434",
         "description": "Incentive payments for governance delegates",
     },
     "community": {
         "name": "Community Allocation Multisig",
-        "address": "0x4cb06982dD097633426cf32038D9f1182a9aDA0c",
+        "address": "0x756Ed67a0e73dD1eC4faCBc307CA79c28d930b20",
         "description": "Funding for community programmes",
     },
     "ecosystem": {
         "name": "Ecosystem Allocation Multisig",
-        "address": "0x4cb06982dD097633426cf32038D9f1182a9aDA0c",
+        "address": "0xE47b51a31ad43aCb72A224fAB4a17999311E2e48",
         "description": "Funding for ecosystem growth initiatives",
     },
 }
