@@ -525,10 +525,11 @@ def fetch_safe_multisig_txs(wallet_id: str, address: str):
             signers_str = ",".join(signers)
             
             # Update transaction if it exists
-            # We only really care about outgoing transactions which match these multisig txs
+            # We want to stamp these signers on ALL legs of this transaction hash, 
+            # regardless of whether a sub-leg was routed to 'committee' or 'treasury'.
             cursor = conn.execute(
-                "UPDATE transactions SET signers = ? WHERE tx_hash = ? AND wallet_id = ?",
-                (signers_str, tx_hash, wallet_id)
+                "UPDATE transactions SET signers = ? WHERE tx_hash = ?",
+                (signers_str, tx_hash)
             )
             updated_count += cursor.rowcount
             
