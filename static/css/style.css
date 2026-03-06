@@ -952,11 +952,12 @@ body {
 
 .tooltip-icon {
     font-size: 11px;
-    vertical-align: middle;
     color: var(--text-muted);
     cursor: help;
     margin-left: 4px;
     opacity: 0.8;
+    position: relative;
+    bottom: 1px;
 }
 
 .tooltip-icon:hover {

@@ -46,10 +46,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (state.wallets.length > 0) {
         // Check localStorage for saved wallet, otherwise default to first with address
         const savedWallet = localStorage.getItem('scrollTreasury_activeWallet');
-        const validSaved = savedWallet && state.wallets.some(w => w.id === savedWallet);
+        const validSaved = savedWallet && savedWallet !== 'all' && state.wallets.some(w => w.id === savedWallet);
         const defaultWallet = validSaved
             ? savedWallet
-            : (state.wallets.find(w => w.address) || state.wallets[0]).id;
+            : 'treasury';
         selectWallet(defaultWallet);
     }
 });
@@ -121,9 +121,13 @@ async function selectWallet(walletId) {
     if (selector) selector.value = walletId;
 
     // Update Header Title
-    const wallet = state.wallets.find(w => w.id === walletId);
+    let titleName = 'Global "All Multisigs"';
+    if (walletId !== 'all') {
+        const wallet = state.wallets.find(w => w.id === walletId);
+        if (wallet) titleName = wallet.name;
+    }
     const titleEl = document.getElementById('active-wallet-title');
-    if (wallet && titleEl) titleEl.textContent = wallet.name;
+    if (titleEl) titleEl.textContent = titleName;
 
     // Show loader
     const content = document.getElementById('dashboard-content');
@@ -158,12 +162,15 @@ function renderWalletSelector() {
     const options = state.wallets.map(w => {
         const addrShort = w.address ? `${w.address.slice(0, 6)}...${w.address.slice(-4)}` : 'Not set';
         return `<option value="${w.id}">${w.name} (${addrShort})</option>`;
-    }).join('');
+    });
+
+    // Add "All Multisigs" option (Removed per user request)
+    // options.unshift(`<option value="all">Global "All Multisigs"</option>`);
 
     container.innerHTML = `
         <div class="wallet-selector-wrapper">
             <select id="wallet-selector" class="wallet-selector" onchange="selectWallet(this.value)">
-                ${options}
+                ${options.join('')}
             </select>
             <svg class="selector-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="6 9 12 15 18 9"></polyline>
@@ -173,11 +180,12 @@ function renderWalletSelector() {
 }
 
 function renderDashboard(budgetComp) {
-    const wallet = state.wallets.find(w => w.id === state.activeWallet);
+    const isAll = state.activeWallet === 'all';
+    const wallet = state.wallets.find(w => w.id === state.activeWallet) || { address: isAll ? 'all' : '' };
     const s = state.stats;
     const content = document.getElementById('dashboard-content');
 
-    if (!wallet.address) {
+    if (!wallet.address && !isAll) {
         content.innerHTML = `<div class="empty-state">
             <p><strong>This multisig has not been deployed yet.</strong></p>
             <p>Once the wallet address is configured, transactions and balances will appear here automatically.</p>
@@ -208,7 +216,7 @@ function renderDashboard(budgetComp) {
         <div class="two-col">
             <div class="card">
                 <div class="card-body">
-                    <h3 class="section-title" style="margin-bottom:14px;">Spending by Category</h3>
+                    <h3 class="section-title" style="margin-bottom:14px;">${state.activeWallet === 'treasury' ? 'Treasury Outflow by Category' : 'Spending by Category'}</h3>
                     ${renderCategoryBreakdown(s.spending_by_category)}
                 </div>
             </div>
@@ -424,8 +432,29 @@ function renderBudgetComparison(budgetComp) {
     let html = `<div class="budget-summary" style="display:flex; gap:16px; margin-bottom:16px; flex-wrap:wrap">`;
 
     // Render USD Summary if applicable
-    if (totals.budget_usd > 0 || totals.spent_usd_native > 0) {
+    if (totals.budget_usd > 0 || totals.spent_usd_native > 0 || state.activeWallet === 'treasury') {
         const usdPct = totals.budget_usd > 0 ? (totals.spent_usd_native / totals.budget_usd * 100) : 0;
+
+        let rightSideHtml = '';
+        if (state.activeWallet === 'treasury') {
+            const subSpentPct = totals.budget_usd > 0 ? ((totals.treasury_sub_spent_usd || 0) / totals.budget_usd * 100) : 0;
+            rightSideHtml = `
+                <div style="text-align:right">
+                    <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total Transferred to other DAO Multisigs <span class="tooltip-icon" title="Transferred to the Operations and Accountability and the Delegates' Incentives Multisigs">ⓘ</span></div>
+                    <div style="font-size:16px; font-weight:700; color:var(--text-main); margin-bottom:8px">$${formatNumber(totals.treasury_transferred_usd || 0)}</div>
+                    <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total Spent <span class="tooltip-icon" title="Spent by the Operations and Accountability and the Delegates' Incentives Multisigs">ⓘ</span></div>
+                    <div style="font-size:16px; font-weight:700; color:${subSpentPct > 90 ? 'var(--accent-red)' : 'var(--accent-green)'}">$${formatNumber(totals.treasury_sub_spent_usd || 0)}</div>
+                </div>
+            `;
+        } else {
+            rightSideHtml = `
+                <div style="text-align:right">
+                    <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total Spent</div>
+                    <div style="font-size:18px; font-weight:700; color:${usdPct > 90 ? 'var(--accent-red)' : 'var(--accent-green)'}">$${formatNumber(totals.spent_usd_native)}</div>
+                </div>
+            `;
+        }
+
         html += `
         <div class="budget-summary-item" style="flex:1; min-width:250px; background:var(--bg-card); padding:20px; border-radius:12px; border:1px solid var(--border-color);">
             <div style="font-weight:700; font-size:14px; color:var(--text-muted); margin-bottom:16px; text-transform:uppercase; letter-spacing:0.5px">Fiat Budgets (USDT)</div>
@@ -434,16 +463,13 @@ function renderBudgetComparison(budgetComp) {
                     <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Quarterly Limit</div>
                     <div style="font-size:18px; font-weight:700; color:var(--accent-scroll)">$${formatNumber(totals.budget_usd)}</div>
                 </div>
-                <div style="text-align:right">
-                    <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total Spent</div>
-                    <div style="font-size:18px; font-weight:700; color:${usdPct > 90 ? 'var(--accent-red)' : 'var(--accent-green)'}">$${formatNumber(totals.spent_usd_native)}</div>
-                </div>
+                ${rightSideHtml}
             </div>
         </div>`;
     }
 
     // Render SCR Summary if applicable
-    if (totals.budget_scr > 0 || totals.spent_scr_native > 0) {
+    if (totals.budget_scr > 0 || totals.spent_scr_native > 0 || state.activeWallet === 'treasury') {
         const scrPct = totals.budget_scr > 0 ? (totals.spent_scr_native / totals.budget_scr * 100) : 0;
 
         // Dynamic tooltip based on the active wallet
@@ -455,6 +481,35 @@ function renderBudgetComparison(budgetComp) {
         };
         const totalScrTooltip = scrTooltips[state.activeWallet] || "Calculated at $0.0812 TWAP from January 6.";
 
+        let rightSideHtmlScr = '';
+        if (state.activeWallet === 'treasury') {
+            const swappedPct = totals.budget_scr > 0 ? ((totals.treasury_scr_swapped || 0) / totals.budget_scr * 100) : 0;
+            const subSpentEcoPct = totals.treasury_transferred_scr_initiatives > 0 ? ((totals.treasury_spent_scr_initiatives_usd || 0) / totals.treasury_transferred_scr_initiatives * 100) : 0;
+            rightSideHtmlScr = `
+                <div style="text-align:right">
+                    <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total Swapped to USDT</div>
+                    <div style="font-size:16px; font-weight:700; color:${swappedPct > 90 ? 'var(--accent-red)' : 'var(--accent-green)'}; margin-bottom:8px">${formatNumber(totals.treasury_scr_swapped || 0)} SCR</div>
+
+                    <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total USDT Available</div>
+                    <div style="font-size:16px; font-weight:700; color:var(--text-main); margin-bottom:8px">$${formatNumber(totals.treasury_usdt_available_from_swap || 0)}</div>
+
+                    <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total Transferred to other DAO Multisigs <span class="tooltip-icon" title="Transferred to the Community Allocations and Ecosystem Allocations Multisigs">ⓘ</span></div>
+                    <div style="font-size:16px; font-weight:700; color:var(--text-main); margin-bottom:8px">$${formatNumber(totals.treasury_transferred_scr_initiatives || 0)}</div>
+
+                    <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total USDT Spent <span class="tooltip-icon" title="Spent by the Community Allocations and Ecosystem Allocations Multisigs">ⓘ</span></div>
+                    <div style="font-size:16px; font-weight:700; color:${subSpentEcoPct > 90 ? 'var(--accent-red)' : 'var(--accent-green)'}">$${formatNumber(totals.treasury_spent_scr_initiatives_usd || 0)}</div>
+                </div>
+            `;
+        } else {
+            rightSideHtmlScr = `
+                <div style="text-align:right">
+                    <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total Spent</div>
+                    <div style="font-size:18px; font-weight:700; color:${scrPct > 90 ? 'var(--accent-red)' : 'var(--accent-green)'}">${formatNumber(totals.spent_scr_native)} SCR</div>
+                </div>
+            `;
+        }
+
+
         html += `
         <div class="budget-summary-item" style="flex:1; min-width:250px; background:var(--bg-card); padding:20px; border-radius:12px; border:1px solid var(--border-color);">
             <div style="font-weight:700; font-size:14px; color:var(--text-muted); margin-bottom:16px; text-transform:uppercase; letter-spacing:0.5px">
@@ -465,10 +520,7 @@ function renderBudgetComparison(budgetComp) {
                     <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Quarterly Limit</div>
                     <div style="font-size:18px; font-weight:700; color:var(--accent-scroll)">${formatNumber(totals.budget_scr)} SCR</div>
                 </div>
-                <div style="text-align:right">
-                    <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total Spent</div>
-                    <div style="font-size:18px; font-weight:700; color:${scrPct > 90 ? 'var(--accent-red)' : 'var(--accent-green)'}">${formatNumber(totals.spent_scr_native)} SCR</div>
-                </div>
+                ${rightSideHtmlScr}
             </div>
         </div>`;
     }
@@ -503,6 +555,8 @@ function renderBudgetComparison(budgetComp) {
                 sharedGroups[c.shared_id].spent += c.spent_usd;
                 if (!sharedGroups[c.shared_id].spent_scr) sharedGroups[c.shared_id].spent_scr = 0;
                 sharedGroups[c.shared_id].spent_scr += (c.spent_scr || 0);
+                if (!sharedGroups[c.shared_id].spent_usd_native) sharedGroups[c.shared_id].spent_usd_native = 0;
+                sharedGroups[c.shared_id].spent_usd_native += (c.spent_usd_native || 0);
             } else {
                 individualItems.push(c);
             }
@@ -516,12 +570,15 @@ function renderBudgetComparison(budgetComp) {
 
             const tooltipHtml = pool.tooltip ? `<span class="tooltip-icon-category" title="${escapeHtml(pool.tooltip)}">ⓘ</span>` : '';
 
+            const isTransfer = ["Operations Committee Discretionary Budget", "Community Allocation", "Ecosystem Allocation", "Ecosystem Shared Pool", "Community Shared Pool"].includes(pool.name);
+            const actionWord = isTransfer ? 'transferred' : 'spent';
+
             html += `
             <div class="budget-item shared-pool">
                 <div class="budget-label">
                     <span class="budget-name" style="font-weight:700">${pool.name} ${tooltipHtml}</span>
                     <span class="budget-amounts">${pool.currency === 'SCR' ?
-                    `${formatNumber(pool.spent_scr)} SCR / ${formatNumber(pool.limit)} SCR` :
+                    `${formatNumber(pool.spent_scr)} SCR / ${formatNumber(pool.limit)} SCR <span style="font-size:12px;color:var(--text-muted)">(~$${formatNumber(pool.spent_usd_native || 0)} ${actionWord})</span>` :
                     `$${formatNumber(pool.spent)} / $${formatNumber(pool.limit)}`}</span>
                 </div>
                 <div class="budget-bar">
@@ -529,12 +586,14 @@ function renderBudgetComparison(budgetComp) {
                 </div>
                 <!-- Breakdown -->
                 <div class="shared-breakdown" style="padding-left:16px; margin-top:8px; display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--text-muted)">
-                    ${pool.items.map(i => `
+                    ${pool.items.map(i => {
+                        const itemActionWord = ["Operations Committee Discretionary Budget", "Community Allocation", "Ecosystem Allocation"].includes(i.category) ? 'transferred' : 'spent';
+                        return `
                         <div style="display:flex; justify-content:space-between">
                             <span>${i.category}</span>
-                            <span>${i.currency === 'SCR' ? `${formatNumber(i.spent_scr)} SCR` : `$${formatNumber(i.spent_usd)}`}</span>
+                            <span>${i.currency === 'SCR' ? `${formatNumber(i.spent_scr)} SCR <span style="color:var(--text-muted)">(~$${formatNumber(i.spent_usd_native || 0)} ${itemActionWord})</span>` : `$${formatNumber(i.spent_usd)}`}</span>
                         </div>
-                    `).join('')}
+                    `}).join('')}
                 </div>
             </div>`;
         });
@@ -547,12 +606,15 @@ function renderBudgetComparison(budgetComp) {
 
             const tooltipHtml = c.tooltip ? `<span class="tooltip-icon-category" title="${escapeHtml(c.tooltip)}">ⓘ</span>` : '';
 
+            const isTransfer = ["Operations Committee Discretionary Budget", "Community Allocation", "Ecosystem Allocation"].includes(c.category);
+            const actionWord = isTransfer ? 'transferred' : 'spent';
+
             html += `
             <div class="budget-item">
                 <div class="budget-label">
                     <span class="budget-name">${c.category} ${tooltipHtml}</span>
                     <span class="budget-amounts">${c.currency === 'SCR' ?
-                    `${formatNumber(c.spent_scr || 0)} SCR / ${formatNumber(c.budget_quarterly)} SCR` :
+                    `${formatNumber(c.spent_scr || 0)} SCR / ${formatNumber(c.budget_quarterly)} SCR <span style="font-size:12px;color:var(--text-muted)">(~$${formatNumber(c.spent_usd_native || 0)} ${actionWord})</span>` :
                     `$${formatNumber(c.spent_usd)} / $${formatNumber(c.budget_quarterly)}`}</span>
                 </div>
                 <div class="budget-bar">
@@ -569,8 +631,15 @@ function renderBudgetComparison(budgetComp) {
 // ── Filters ─────────────────────────────────────────────────────────────
 
 function renderFilters() {
-    const wallet = state.wallets.find(w => w.id === state.activeWallet);
-    const cats = wallet ? wallet.categories : [];
+    let cats = [];
+    if (state.activeWallet === 'all') {
+        const allCats = new Set();
+        state.wallets.forEach(w => w.categories.forEach(c => allCats.add(c)));
+        cats = Array.from(allCats).sort();
+    } else {
+        const wallet = state.wallets.find(w => w.id === state.activeWallet);
+        cats = wallet ? wallet.categories : [];
+    }
     const tokens = state.stats ? state.stats.tokens : [];
 
     return `<div class="tx-controls">
@@ -620,8 +689,16 @@ function renderTransactionsTable() {
         return '<div class="empty-state" style="padding:32px"><p>No transactions found</p></div>';
     }
 
-    const wallet = state.wallets.find(w => w.id === state.activeWallet);
-    const cats = wallet ? wallet.categories : [];
+    let cats = [];
+    const isAll = state.activeWallet === 'all';
+    if (isAll) {
+        const allCats = new Set();
+        state.wallets.forEach(w => w.categories.forEach(c => allCats.add(c)));
+        cats = Array.from(allCats).sort();
+    } else {
+        const wallet = state.wallets.find(w => w.id === state.activeWallet);
+        cats = wallet ? wallet.categories : [];
+    }
 
     let rows = txs.map(tx => {
         const isUncat = tx.category === 'Uncategorised';
@@ -647,12 +724,32 @@ function renderTransactionsTable() {
 
         const signersHtml = formatSigners(tx.signers);
 
+        // Specific categories are treated as non-expenses ONLY when transferred from the Treasury directly
+        const isTreasuryTransferCategory = ['Operations & Accountability Committee', 'Delegates Incentives', 'Operations Committee Discretionary Budget', 'Community Allocation', 'Ecosystem Allocation'].includes(tx.category);
+        const isNonExpense = ['Internal Operations', 'Treasury Swap', 'Internal Transfer'].includes(tx.category) || (tx.wallet_id === 'treasury' && isTreasuryTransferCategory);
+
+        const amountClass = tx.category === 'Internal Operations' ? 'neutral' : tx.direction;
+
+        let customEmoji = '';
+        if (tx.category === 'Uncategorised') customEmoji = '❔ ';
+        else if (isTreasuryTransferCategory || tx.category === 'Internal Transfer') customEmoji = '➡️ ';
+        else if (tx.category === 'Internal Operations') customEmoji = '⚙️ ';
+        else if (tx.category === 'Treasury Swap') customEmoji = '🔄 ';
+        else if (tx.category === 'Incoming Transaction') customEmoji = '⬇️ ';
+        else if (tx.category === 'General Purpose DAO Budget' && tx.direction === 'out') customEmoji = '💸 ';
+
+        const amountSign = tx.category === 'Internal Operations' ? customEmoji : (tx.direction === 'in' ? `${customEmoji}+` : `${customEmoji}-`);
+        const amountHtml = `<span class="tx-amount ${amountClass}">${amountSign}${formatTokenAmount(tx.value_decimal, tx.token_symbol)} ${escapeHtml(tx.token_symbol)}</span>`;
+
+        const sourceWalletName = state.wallets.find(w => w.id === tx.wallet_id)?.name || tx.wallet_id;
+
         return `<tr>
+            ${isAll ? `<td><span class="tx-badge" style="background:var(--bg-lighter); color:var(--text-main); font-size:11px; max-width: 120px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; display: inline-block;" title="${escapeHtml(sourceWalletName)}">${escapeHtml(sourceWalletName)}</span></td>` : ''}
             <td>${escapeHtml(tx.date)}</td>
             <td><a class="tx-hash" href="https://scrollscan.com/tx/${escapeHtml(tx.tx_hash)}" target="_blank" rel="noopener">${escapeHtml(tx.tx_hash.slice(0, 10))}...</a></td>
             <td><span class="tx-addr">${shortenAddr(tx.from_address)}</span></td>
             <td><span class="tx-addr">${shortenAddr(tx.to_address)}</span></td>
-            <td><span class="tx-amount ${tx.direction}">${tx.direction === 'in' ? '+' : '-'}${formatTokenAmount(tx.value_decimal, tx.token_symbol)} ${escapeHtml(tx.token_symbol)}</span></td>
+            <td>${amountHtml}</td>
             <td>${escapeHtml(tx.tx_type)}</td>
             <td>${categoryCell}</td>
             <td>${signersHtml}</td>
@@ -662,6 +759,7 @@ function renderTransactionsTable() {
 
     return `<table class="tx-table">
         <thead><tr>
+            ${isAll ? '<th>Wallet</th>' : ''}
             <th>Date</th><th>TX Hash</th><th>From</th><th>To</th>
             <th>Amount</th><th>Type</th><th>Category</th><th>Signers</th><th>Notes</th>
         </tr></thead>

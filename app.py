@@ -31,7 +31,7 @@ from config import (
     SECRET_KEY, AUTH_USERNAME, AUTH_PASSWORD,
     MULTISIGS, CATEGORIES, BUDGETS, BUDGET_TOTALS,
     FETCH_INTERVAL_MINUTES, TOKEN_COINGECKO_IDS,
-    BUDGET_OVERRIDES, SIGNER_ALIASES,
+    BUDGET_OVERRIDES, SIGNER_ALIASES, NON_EXPENSE_CATEGORIES
 )
 from models import get_db, init_db, seed_wallets, close_db
 from fetcher import fetch_all, fetch_single_wallet
@@ -210,6 +210,11 @@ def api_wallets():
 
 @app.route("/api/categories/<wallet_id>")
 def api_categories(wallet_id):
+    if wallet_id == 'all':
+        all_cats = set()
+        for cats in CATEGORIES.values():
+            all_cats.update(cats)
+        return jsonify(sorted(list(all_cats)))
     return jsonify(CATEGORIES.get(wallet_id, ["Uncategorised"]))
 
 
@@ -240,8 +245,12 @@ def api_transactions(wallet_id):
     Query params: direction, category, token, date_from, date_to, limit, offset, search
     """
     conn = get_db()
-    conditions = ["wallet_id = ?"]
-    params = [wallet_id]
+    conditions = ["1=1"]
+    params = []
+    
+    if wallet_id != 'all':
+        conditions.append("wallet_id = ?")
+        params.append(wallet_id)
 
     direction = request.args.get("direction")
     if direction and direction in ("in", "out"):
@@ -322,10 +331,17 @@ def api_transactions(wallet_id):
             "notes": r["notes"],
             "signers": r["signers"],
             "is_error": r["is_error"],
+            "wallet_id": r["wallet_id"],
         })
 
 
-    aliases = SIGNER_ALIASES.get(wallet_id, {})
+    if wallet_id == 'all':
+        aliases = {}
+        for w_aliases in SIGNER_ALIASES.values():
+            aliases.update(w_aliases)
+    else:
+        aliases = SIGNER_ALIASES.get(wallet_id, {})
+        
     return jsonify({
         "transactions": txs,
         "total": total,
@@ -400,7 +416,13 @@ def api_stats(wallet_id):
 
     # Balances
     balances = []
-    for row in conn.execute("SELECT * FROM balances WHERE wallet_id=?", (wallet_id,)).fetchall():
+    if wallet_id == 'all':
+        balances_query = "SELECT token_symbol, token_name, contract_address, SUM(balance_decimal) as balance_decimal, MAX(last_updated) as last_updated FROM balances GROUP BY token_symbol, token_name, contract_address"
+        balances_params = ()
+    else:
+        balances_query = "SELECT * FROM balances WHERE wallet_id=?"
+        balances_params = (wallet_id,)
+    for row in conn.execute(balances_query, balances_params).fetchall():
         symbol = row["token_symbol"]
         price = prices.get(symbol, 0)
         balance = row["balance_decimal"]
@@ -414,18 +436,51 @@ def api_stats(wallet_id):
             "contract_address": row["contract_address"],
         })
 
-    # Spending by category (outgoing only) - using historical prices
+    # Spending by category (outgoing only, excluding non-expenses) - using historical prices
     spending = []
-    spending_rows = conn.execute(
-        """SELECT 
-             category, 
-             token_symbol,
-             value_decimal,
-             date(timestamp, 'unixepoch') as tx_date
-           FROM transactions
-           WHERE wallet_id=? AND direction='out' AND is_error=0""",
-        (wallet_id,),
-    ).fetchall()
+    
+    # Generate placeholders and parameters for IN clause
+    qs = ','.join(['?']*len(NON_EXPENSE_CATEGORIES))
+    
+    if wallet_id == 'all':
+        query = f"""SELECT 
+                 category, 
+                 token_symbol,
+                 value_decimal,
+                 date(timestamp, 'unixepoch') as tx_date
+               FROM transactions
+               WHERE direction='out' 
+                 AND is_error=0
+                 AND category NOT IN ({qs})"""
+        params = list(NON_EXPENSE_CATEGORIES)
+    elif wallet_id == 'treasury':
+        # Custom logic for the Treasury Outflow Chart:
+        # We want to include exactly the items that are specifically filtered out as "expenses" for other charts
+        query = f"""SELECT 
+                 category, 
+                 token_symbol,
+                 value_decimal,
+                 date(timestamp, 'unixepoch') as tx_date
+               FROM transactions
+               WHERE wallet_id=? 
+                 AND direction='out' 
+                 AND is_error=0
+                 AND category != 'Internal Operations' AND value_decimal > 0"""
+        params = [wallet_id]
+    else:
+        query = f"""SELECT 
+                 category, 
+                 token_symbol,
+                 value_decimal,
+                 date(timestamp, 'unixepoch') as tx_date
+               FROM transactions
+               WHERE wallet_id=? 
+                 AND direction='out' 
+                 AND is_error=0
+                 AND category NOT IN ({qs})"""
+        params = [wallet_id] + list(NON_EXPENSE_CATEGORIES)
+    
+    spending_rows = conn.execute(query, params).fetchall()
 
     # Aggregate in python
     cat_spending = {}
@@ -435,6 +490,22 @@ def api_stats(wallet_id):
         val = r["value_decimal"]
         tx_date = r["tx_date"]
         
+        # Map the category if it's the Treasury
+        if wallet_id == 'treasury':
+            fiat_group = ["Operations & Accountability Committee", "Delegates Incentives", "Operations Committee Discretionary Budget"]
+            token_group = ["Community Allocation", "Ecosystem Allocation"]
+            
+            if cat in fiat_group or (cat == 'Internal Transfer' and sym in ['USDT', 'USDC']):
+                cat = "Fiat Transfers (USDT)"
+            elif cat in token_group or (cat == 'Internal Transfer' and sym == 'SCR'):
+                cat = "Token Transfers (SCR)"
+            elif cat == "Treasury Swap":
+                cat = "Treasury Swaps"
+            elif cat == "General Purpose DAO Budget":
+                cat = "Direct DAO Spend"
+            else:
+                cat = "Other Transfers"
+
         # Lookup from pre-fetched prices (no DB query per row)
         hist_price = price_map.get((sym, tx_date), prices.get(sym, 0))
         usd_val = val * hist_price
@@ -461,21 +532,38 @@ def api_stats(wallet_id):
     spending.sort(key=lambda x: (0 if x["category"] == "Uncategorised" else 1, -x["total_usd"]))
 
 
-    # Monthly burn rate (last 6 months) - using historical prices
+    # Monthly burn rate (last 6 months, excluding non-expenses) - using historical prices
     now = int(time.time())
     six_months_ago = now - (180 * 86400)
     
-    burn_rows = conn.execute(
-        """SELECT
-             strftime('%Y-%m', datetime(timestamp, 'unixepoch')) as month,
-             date(timestamp, 'unixepoch') as tx_date,
-             token_symbol,
-             value_decimal
-           FROM transactions
-           WHERE wallet_id=? AND direction='out' AND is_error=0
-                 AND timestamp >= ?""",
-        (wallet_id, six_months_ago),
-    ).fetchall()
+    qs = ','.join(['?']*len(NON_EXPENSE_CATEGORIES))
+    if wallet_id == 'all':
+        query = f"""SELECT
+                 strftime('%Y-%m', datetime(timestamp, 'unixepoch')) as month,
+                 date(timestamp, 'unixepoch') as tx_date,
+                 token_symbol,
+                 value_decimal
+               FROM transactions
+               WHERE direction='out' 
+                     AND is_error=0
+                     AND timestamp >= ?
+                     AND category NOT IN ({qs})"""
+        params = [six_months_ago] + list(NON_EXPENSE_CATEGORIES)
+    else:
+        query = f"""SELECT
+                 strftime('%Y-%m', datetime(timestamp, 'unixepoch')) as month,
+                 date(timestamp, 'unixepoch') as tx_date,
+                 token_symbol,
+                 value_decimal
+               FROM transactions
+               WHERE wallet_id=? 
+                     AND direction='out' 
+                     AND is_error=0
+                     AND timestamp >= ?
+                     AND category NOT IN ({qs})"""
+        params = [wallet_id, six_months_ago] + list(NON_EXPENSE_CATEGORIES)
+    
+    burn_rows = conn.execute(query, params).fetchall()
 
     monthly_burn_map: Dict[tuple, Dict[str, float]] = {}
     for r in burn_rows:
@@ -519,21 +607,36 @@ def api_stats(wallet_id):
     monthly_burn.sort(key=lambda x: x["month"])
 
     # Transaction count summary
-    counts = conn.execute(
-        """SELECT
-             COUNT(*) as total,
-             SUM(CASE WHEN direction='in' THEN 1 ELSE 0 END) as incoming,
-             SUM(CASE WHEN direction='out' THEN 1 ELSE 0 END) as outgoing,
-             SUM(CASE WHEN category='Uncategorised' THEN 1 ELSE 0 END) as uncategorised
-           FROM transactions WHERE wallet_id=?""",
-        (wallet_id,),
-    ).fetchone()
-
-    # Token list
-    tokens = [r["token_symbol"] for r in conn.execute(
-        "SELECT DISTINCT token_symbol FROM transactions WHERE wallet_id=? ORDER BY token_symbol",
-        (wallet_id,),
-    ).fetchall()]
+    if wallet_id == 'all':
+        counts = conn.execute(
+            """SELECT
+                 COUNT(*) as total,
+                 SUM(CASE WHEN direction='in' THEN 1 ELSE 0 END) as incoming,
+                 SUM(CASE WHEN direction='out' THEN 1 ELSE 0 END) as outgoing,
+                 SUM(CASE WHEN category='Uncategorised' THEN 1 ELSE 0 END) as uncategorised
+               FROM transactions"""
+        ).fetchone()
+        
+        # Token list
+        tokens = [r["token_symbol"] for r in conn.execute(
+            "SELECT DISTINCT token_symbol FROM transactions ORDER BY token_symbol"
+        ).fetchall()]
+    else:
+        counts = conn.execute(
+            """SELECT
+                 COUNT(*) as total,
+                 SUM(CASE WHEN direction='in' THEN 1 ELSE 0 END) as incoming,
+                 SUM(CASE WHEN direction='out' THEN 1 ELSE 0 END) as outgoing,
+                 SUM(CASE WHEN category='Uncategorised' THEN 1 ELSE 0 END) as uncategorised
+               FROM transactions WHERE wallet_id=?""",
+            (wallet_id,),
+        ).fetchone()
+    
+        # Token list
+        tokens = [r["token_symbol"] for r in conn.execute(
+            "SELECT DISTINCT token_symbol FROM transactions WHERE wallet_id=? ORDER BY token_symbol",
+            (wallet_id,),
+        ).fetchall()]
 
 
 
@@ -555,7 +658,10 @@ def api_stats(wallet_id):
 def api_budget_comparison(wallet_id):
     """Return spent vs budgeted amounts for each category (using historical prices)."""
     conn = get_db()
-    categories = CATEGORIES.get(wallet_id, [])
+    if wallet_id == 'all':
+        categories = set(cat for cats in CATEGORIES.values() for cat in cats)
+    else:
+        categories = CATEGORIES.get(wallet_id, [])
     result = []
 
     # Get current prices as fallback
@@ -566,13 +672,38 @@ def api_budget_comparison(wallet_id):
     for row in conn.execute("SELECT symbol, date, price FROM token_prices").fetchall():
         price_map[(row["symbol"], row["date"])] = row["price"]
     
-    # Fetch all outgoing transactions for this wallet at once
-    all_spent_rows = conn.execute(
-        """SELECT category, token_symbol, value_decimal, date(timestamp, 'unixepoch') as tx_date
-           FROM transactions
-           WHERE wallet_id=? AND direction='out' AND is_error=0""",
-        (wallet_id,),
-    ).fetchall()
+    # Fetch all outgoing transactions for this wallet at once (excluding non-expenses)
+    
+    if wallet_id == 'all':
+        qs = ','.join(['?']*len(NON_EXPENSE_CATEGORIES))
+        query = f"""SELECT category, token_symbol, value_decimal, date(timestamp, 'unixepoch') as tx_date
+               FROM transactions
+               WHERE direction='out' 
+                 AND is_error=0
+                 AND category NOT IN ({qs})"""
+        params = list(NON_EXPENSE_CATEGORIES)
+    elif wallet_id == 'treasury':
+        # The Treasury needs to track its transfers in its budget bars (they aren't non-expenses for it)
+        treasury_non_expenses = ["Internal Operations", "Treasury Swap", "Internal Transfer"]
+        qs = ','.join(['?']*len(treasury_non_expenses))
+        query = f"""SELECT category, token_symbol, value_decimal, date(timestamp, 'unixepoch') as tx_date
+               FROM transactions
+               WHERE wallet_id=? 
+                 AND direction='out' 
+                 AND is_error=0
+                 AND category NOT IN ({qs})"""
+        params = [wallet_id] + treasury_non_expenses
+    else:
+        qs = ','.join(['?']*len(NON_EXPENSE_CATEGORIES))
+        query = f"""SELECT category, token_symbol, value_decimal, date(timestamp, 'unixepoch') as tx_date
+               FROM transactions
+               WHERE wallet_id=? 
+                 AND direction='out' 
+                 AND is_error=0
+                 AND category NOT IN ({qs})"""
+        params = [wallet_id] + list(NON_EXPENSE_CATEGORIES)
+    
+    all_spent_rows = conn.execute(query, params).fetchall()
     
     # Group by category in Python
     spent_by_cat: Dict[str, list] = {}
@@ -582,18 +713,36 @@ def api_budget_comparison(wallet_id):
             spent_by_cat[cat] = []
         spent_by_cat[cat].append(r)
     
+    # Calculate Volume-Weighted Average Price (VWAP) for DAO Swaps
+    swap_scr_out_query = "SELECT SUM(value_decimal) as val FROM transactions WHERE category='Treasury Swap' AND direction='out' AND token_symbol='SCR'"
+    swap_usdt_in_query = "SELECT SUM(value_decimal) as val FROM transactions WHERE category='Treasury Swap' AND direction='in' AND token_symbol IN ('USDT', 'USDC')"
+    
+    total_scr_out = conn.execute(swap_scr_out_query).fetchone()["val"] or 0
+    total_usdt_in = conn.execute(swap_usdt_in_query).fetchone()["val"] or 0
+    
+    effective_swap_price = 0
+    if total_scr_out > 0 and total_usdt_in > 0:
+        effective_swap_price = total_usdt_in / total_scr_out
+    
+    total_spent_usd_native = 0
+    total_spent_scr_native = 0
+
     for cat in categories:
         if cat == "Uncategorised":
             continue
         
         # Check for override first
         base_budget = BUDGETS.get(cat, {})
-        override = BUDGET_OVERRIDES.get(wallet_id, {}).get(cat, {})
+        if wallet_id == 'all':
+            override = {}
+        else:
+            override = BUDGET_OVERRIDES.get(wallet_id, {}).get(cat, {})
         # Merge override into base (shallow merge is fine for our structure)
-        budget = {**base_budget, **override}
+        budget: Dict[str, Any] = {**base_budget, **override}
         
         spent_usd = 0
         spent_scr = 0
+        cat_spent_usd_native = 0
         for r in spent_by_cat.get(cat, []):
             symbol = r["token_symbol"]
             tx_date = r["tx_date"]
@@ -606,10 +755,19 @@ def api_budget_comparison(wallet_id):
             
             if symbol == "SCR":
                 spent_scr += val
+                total_spent_scr_native += val
+            elif symbol in ["USDT", "USDC"] and effective_swap_price > 0:
+                # Use the DAO's actual average swap execution price instead of daily market volatility
+                spent_scr += val / effective_swap_price
+                total_spent_usd_native += val
+                cat_spent_usd_native += val
             else:
                 scr_price_at_date = price_map.get(("SCR", tx_date), prices.get("SCR", 1))
                 if scr_price_at_date > 0:
                     spent_scr += usd_val / scr_price_at_date
+                total_spent_usd_native += usd_val
+                if symbol in ["USDT", "USDC"]:
+                    cat_spent_usd_native += val
 
         # Helper to avoid linter confusion
         budget_q = float(budget.get("quarterly", 0))
@@ -617,6 +775,7 @@ def api_budget_comparison(wallet_id):
         result.append({
             "category": cat,
             "spent_usd": spent_usd,
+            "spent_usd_native": cat_spent_usd_native,
             "spent_scr": spent_scr,
             "budget_quarterly": budget_q,
             "group": budget.get("group", "Other"),
@@ -630,10 +789,6 @@ def api_budget_comparison(wallet_id):
     # Overall totals - Original blended logic
     total_spent = sum(r["spent_usd"] for r in result)
     total_spent_scr = sum(r["spent_scr"] for r in result)
-
-    # Calculate explicit totals based on the native currency of the budget
-    total_spent_usd_native = sum(r["spent_usd"] for r in result if r.get("currency") == "USD")
-    total_spent_scr_native = sum(r["spent_scr"] for r in result if r.get("currency") == "SCR")
     
     # Calculate unique budget limits to avoid multiplying shared pools
     total_budget_usd = 0
@@ -671,6 +826,106 @@ def api_budget_comparison(wallet_id):
             groups_list.append(g)
             seen.add(g)
 
+    treasury_transferred_usd = 0
+    treasury_sub_spent_usd = 0
+    treasury_scr_swapped = 0
+    treasury_usdt_available_from_swap = 0
+    treasury_transferred_scr_initiatives = 0
+    treasury_spent_scr_initiatives_usd = 0
+
+    if wallet_id == 'treasury':
+        # Calculate transferred to Operations & Delegates (USD part)
+        transferred_query = """SELECT token_symbol, value_decimal, date(timestamp, 'unixepoch') as tx_date 
+                             FROM transactions 
+                             WHERE wallet_id='treasury' AND direction='out' AND category='Internal Transfer'
+                             AND to_address IN (SELECT address FROM wallets WHERE id IN ('committee', 'delegates'))"""
+        
+        # We don't have a wallets table with addresses easily mapped like this in DB.
+        # Fallback to hardcoded addresses from MULTISIGS list since they are static:
+        ops_addresses = [
+            '0xd0d05390d922a2c45a70eaa4601600f236c02acc', # committee
+            '0x7964e7bf48948c9e1d89f419cad8ef7d8d8f0434'  # delegates
+        ]
+        
+        ops_categories_tuple = "('Internal Transfer', 'Operations & Accountability Committee', 'Delegates Incentives', 'Operations Committee Discretionary Budget')"
+        transferred_query = f"""SELECT token_symbol, value_decimal, date(timestamp, 'unixepoch') as tx_date 
+                             FROM transactions 
+                             WHERE wallet_id='treasury' AND direction='out' AND category IN {ops_categories_tuple}
+                             AND LOWER(to_address) IN ({','.join(['?']*len(ops_addresses))})"""
+        
+        transferred_rows = conn.execute(transferred_query, [a.lower() for a in ops_addresses]).fetchall()
+        for r in transferred_rows:
+            symbol = r["token_symbol"]
+            tx_date = r["tx_date"]
+            val = r["value_decimal"]
+            hist_price = price_map.get((symbol, tx_date), prices.get(symbol, 0))
+            treasury_transferred_usd += (val * hist_price)
+
+        # Calculate subsidiary spent (Ops & Delegates)
+        qs = ','.join(['?']*len(NON_EXPENSE_CATEGORIES))
+        sub_spent_query = f"""SELECT token_symbol, value_decimal, date(timestamp, 'unixepoch') as tx_date 
+                              FROM transactions 
+                              WHERE wallet_id IN ('committee', 'delegates') 
+                                AND direction='out' 
+                                AND is_error=0 
+                                AND category NOT IN ({qs})"""
+        sub_spent_rows = conn.execute(sub_spent_query, list(NON_EXPENSE_CATEGORIES)).fetchall()
+        for r in sub_spent_rows:
+            symbol = r["token_symbol"]
+            tx_date = r["tx_date"]
+            val = r["value_decimal"]
+            hist_price = price_map.get((symbol, tx_date), prices.get(symbol, 0))
+            treasury_sub_spent_usd += (val * hist_price)
+            
+        # SCR Part: Swapped, Available, Transferred, Sub-Spent
+        # 1. Swapped SCR to USDT
+        swapped_query = """SELECT SUM(value_decimal) as val
+                           FROM transactions 
+                           WHERE wallet_id='treasury' AND direction='out' AND category='Treasury Swap' AND token_symbol='SCR'"""
+        row = conn.execute(swapped_query).fetchone()
+        treasury_scr_swapped = row["val"] if row and row["val"] else 0
+
+        # 2. Available USDT from Swap
+        available_query = """SELECT SUM(value_decimal) as val
+                             FROM transactions 
+                             WHERE wallet_id='treasury' AND direction='in' AND category='Treasury Swap' AND token_symbol='USDT'"""
+        row = conn.execute(available_query).fetchone()
+        treasury_usdt_available_from_swap = row["val"] if row and row["val"] else 0
+
+        # 3. Transferred USDT to Community & Ecosystem
+        ecosystem_addresses = [
+            '0x756ed67a0e73dd1ec4facbc307ca79c28d930b20', # community
+            '0xe47b51a31ad43acb72a224fab4a17999311e2e48'  # ecosystem
+        ]
+        eco_categories_tuple = "('Internal Transfer', 'Community Allocation', 'Ecosystem Allocation')"
+        transferred_eco_query = f"""SELECT token_symbol, value_decimal, date(timestamp, 'unixepoch') as tx_date 
+                             FROM transactions 
+                             WHERE wallet_id='treasury' AND direction='out' AND category IN {eco_categories_tuple}
+                             AND LOWER(to_address) IN ({','.join(['?']*len(ecosystem_addresses))})"""
+        transferred_eco_rows = conn.execute(transferred_eco_query, [a.lower() for a in ecosystem_addresses]).fetchall()
+        for r in transferred_eco_rows:
+            symbol = r["token_symbol"]
+            tx_date = r["tx_date"]
+            val = r["value_decimal"]
+            hist_price = price_map.get((symbol, tx_date), prices.get(symbol, 0))
+            treasury_transferred_scr_initiatives += (val * hist_price)
+
+        # 4. USDT Spent by Community & Ecosystem
+        sub_spent_eco_query = f"""SELECT token_symbol, value_decimal, date(timestamp, 'unixepoch') as tx_date 
+                              FROM transactions 
+                              WHERE wallet_id IN ('community', 'ecosystem') 
+                                AND direction='out' 
+                                AND is_error=0 
+                                AND category NOT IN ({qs})"""
+        sub_spent_eco_rows = conn.execute(sub_spent_eco_query, list(NON_EXPENSE_CATEGORIES)).fetchall()
+        for r in sub_spent_eco_rows:
+            symbol = r["token_symbol"]
+            tx_date = r["tx_date"]
+            val = r["value_decimal"]
+            hist_price = price_map.get((symbol, tx_date), prices.get(symbol, 0))
+            treasury_spent_scr_initiatives_usd += (val * hist_price)
+
+
     return jsonify({
         "categories": result,
         "prices": prices,
@@ -682,6 +937,12 @@ def api_budget_comparison(wallet_id):
             "budget_quarterly": wallet_totals.get("quarterly", 0),
             "budget_usd": total_budget_usd,
             "budget_scr": total_budget_scr,
+            "treasury_transferred_usd": treasury_transferred_usd,
+            "treasury_sub_spent_usd": treasury_sub_spent_usd,
+            "treasury_scr_swapped": treasury_scr_swapped,
+            "treasury_usdt_available_from_swap": treasury_usdt_available_from_swap,
+            "treasury_transferred_scr_initiatives": treasury_transferred_scr_initiatives,
+            "treasury_spent_scr_initiatives_usd": treasury_spent_scr_initiatives_usd,
         },
         "groups": groups_list, 
     })
@@ -692,10 +953,17 @@ def api_budget_comparison(wallet_id):
 @app.route("/api/export/<wallet_id>")
 def api_export(wallet_id):
     conn = get_db()
-    rows = conn.execute(
-        "SELECT * FROM transactions WHERE wallet_id=? ORDER BY timestamp DESC",
-        (wallet_id,),
-    ).fetchall()
+    if wallet_id == 'all':
+        rows = conn.execute(
+            "SELECT * FROM transactions ORDER BY timestamp DESC"
+        ).fetchall()
+        wallet_name = "All_Multisigs"
+    else:
+        rows = conn.execute(
+            "SELECT * FROM transactions WHERE wallet_id=? ORDER BY timestamp DESC",
+            (wallet_id,),
+        ).fetchall()
+        wallet_name = MULTISIGS.get(wallet_id, {}).get("name", wallet_id).replace(" ", "_")
 
 
     output = io.StringIO()
@@ -714,8 +982,9 @@ def api_export(wallet_id):
 
     output.seek(0)
     
+    output.seek(0)
+    
     # improved filename
-    wallet_name = MULTISIGS.get(wallet_id, {}).get("name", wallet_id).replace(" ", "_")
     return Response(
         output.getvalue(),
         mimetype="text/csv",

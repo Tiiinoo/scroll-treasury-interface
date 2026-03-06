@@ -91,6 +91,18 @@ SIGNER_ALIASES = {
 # ---------------------------------------------------------------------------
 # Expense Categories per Multisig
 # ---------------------------------------------------------------------------
+
+NON_EXPENSE_CATEGORIES = [
+    "Internal Operations",
+    "Treasury Swap",
+    "Internal Transfer",
+    "Operations & Accountability Committee",
+    "Delegates Incentives",
+    "Operations Committee Discretionary Budget",
+    "Community Allocation",
+    "Ecosystem Allocation"
+]
+
 CATEGORIES = {
     "treasury": [
         "Uncategorised",
@@ -101,6 +113,8 @@ CATEGORIES = {
         "Community Allocation",
         "Ecosystem Allocation",
         "Internal Operations",
+        "Treasury Swap",
+        "Internal Transfer",
         "Incoming Transaction",
     ],
     "committee": [
@@ -112,6 +126,8 @@ CATEGORIES = {
         "Accountability Lead",
         "Accountability Operator",
         "Internal Operations",
+        "Treasury Swap",
+        "Internal Transfer",
         "Incoming Transaction",
     ],
     "delegates": [
@@ -119,6 +135,8 @@ CATEGORIES = {
         "Governance Contribution Recognition",
         "Delegate Contributions Programme",
         "Internal Operations",
+        "Treasury Swap",
+        "Internal Transfer",
         "Incoming Transaction",
     ],
     "community": [
@@ -126,6 +144,8 @@ CATEGORIES = {
         "Local Nodes",
         "Community Support Programme",
         "Internal Operations",
+        "Treasury Swap",
+        "Internal Transfer",
         "Incoming Transaction",
     ],
     "ecosystem": [
@@ -134,6 +154,8 @@ CATEGORIES = {
         "Creator Fund",
         "Security Subsidy Programme",
         "Internal Operations",
+        "Treasury Swap",
+        "Internal Transfer",
         "Incoming Transaction",
     ],
 }
