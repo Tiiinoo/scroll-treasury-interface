@@ -498,7 +498,8 @@ def fetch_safe_multisig_txs(wallet_id: str, address: str):
     }
 
     try:
-        resp = session.get(url, params=params, timeout=30)
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
+        resp = session.get(url, params=params, headers=headers, timeout=30)
         if resp.status_code != 200:
             logger.warning("Safe API error %s: %s", resp.status_code, resp.text)
             return
