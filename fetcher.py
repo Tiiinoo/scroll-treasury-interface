@@ -7,6 +7,7 @@ and stores them in the SQLite database.
 
 import time
 import logging
+import urllib.parse
 from datetime import datetime, timezone
 import requests
 from requests.adapters import HTTPAdapter
@@ -490,16 +491,13 @@ def fetch_safe_multisig_txs(wallet_id: str, address: str):
         return
 
     # We only care about executed transactions
-    url = f"{SAFE_API_BASE}/safes/{address}/multisig-transactions/"
-    params = {
-        "executed": "true",
-        "limit": 100,  # Fetch last 100
-        "ordering": "-executionDate"
-    }
+    safe_url = f"{SAFE_API_BASE}/safes/{address}/multisig-transactions/?executed=true&limit=100&ordering=-executionDate"
+    encoded_url = urllib.parse.quote(safe_url)
+    proxy_url = f"https://api.allorigins.win/raw?url={encoded_url}"
 
     try:
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
-        resp = session.get(url, params=params, headers=headers, timeout=30)
+        headers = {"User-Agent": "Mozilla/5.0"}
+        resp = session.get(proxy_url, headers=headers, timeout=30)
         if resp.status_code != 200:
             logger.warning("Safe API error %s: %s", resp.status_code, resp.text)
             return
