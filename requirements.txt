@@ -8,3 +8,4 @@ python-dotenv>=1.0
 apscheduler>=3.10
 werkzeug>=3.0
 gunicorn>=21.2
+Flask-Caching==2.3.1

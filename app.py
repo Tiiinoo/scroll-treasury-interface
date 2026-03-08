@@ -23,6 +23,7 @@ from flask import (
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_caching import Cache
 from flask_wtf.csrf import CSRFProtect
 from flask_talisman import Talisman
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -44,6 +45,10 @@ app.secret_key = SECRET_KEY
 # CORS — restrict to your domain in production
 ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "*").split(",")
 CORS(app, origins=ALLOWED_ORIGINS)
+
+# Cache — handle caching for stats aggregations
+cache = Cache(config={'CACHE_TYPE': 'SimpleCache', 'CACHE_DEFAULT_TIMEOUT': 300})
+cache.init_app(app)
 
 # Rate limiting
 limiter = Limiter(
@@ -407,6 +412,7 @@ def api_bulk_categorise():
 # ── Dashboard Stats API ─────────────────────────────────────────────────
 
 @app.route("/api/stats/<wallet_id>")
+@cache.cached(timeout=300, query_string=True)
 def api_stats(wallet_id):
     conn = get_db()
 
@@ -624,8 +630,18 @@ def api_stats(wallet_id):
     treasury_monthly_swaps = []
     
     if wallet_id == 'treasury':
+        query_transfers_params = [wallet_id]
+        
+        # Determine timeframe
+        months_param = request.args.get('months', '6')
+        timeframe_condition = "AND timestamp >= ?"
+        if months_param == 'all':
+            timeframe_condition = ""
+        else:
+            query_transfers_params.append(six_months_ago)
+
         # 1. Treasury Transfers/Expenses
-        query_transfers = """SELECT
+        query_transfers = f"""SELECT
                  strftime('%Y-%m', datetime(timestamp, 'unixepoch')) as month,
                  date(timestamp, 'unixepoch') as tx_date,
                  token_symbol,
@@ -635,8 +651,8 @@ def api_stats(wallet_id):
                      AND direction='out' 
                      AND is_error=0
                      AND category NOT IN ('Internal Operations', 'Treasury Swap')
-                     AND timestamp >= ?"""
-        transfers_rows = conn.execute(query_transfers, (wallet_id, six_months_ago)).fetchall()
+                     {timeframe_condition}"""
+        transfers_rows = conn.execute(query_transfers, tuple(query_transfers_params)).fetchall()
         
         t_transfers_map: Dict[str, float] = {}
         for r in transfers_rows:
@@ -657,7 +673,11 @@ def api_stats(wallet_id):
             })
             
         # 2. Treasury Swaps
-        query_swaps_out = """SELECT
+        query_swaps_params = [wallet_id]
+        if months_param != 'all':
+            query_swaps_params.append(six_months_ago)
+
+        query_swaps_out = f"""SELECT
                  strftime('%Y-%m', datetime(timestamp, 'unixepoch')) as month,
                  SUM(value_decimal) as val
                FROM transactions
@@ -666,10 +686,10 @@ def api_stats(wallet_id):
                  AND direction='out'
                  AND token_symbol='SCR'
                  AND is_error=0
-                 AND timestamp >= ?
+                 {timeframe_condition}
                GROUP BY month"""
                
-        query_swaps_in = """SELECT
+        query_swaps_in = f"""SELECT
                  strftime('%Y-%m', datetime(timestamp, 'unixepoch')) as month,
                  SUM(value_decimal) as val
                FROM transactions
@@ -678,11 +698,11 @@ def api_stats(wallet_id):
                  AND direction='in'
                  AND token_symbol IN ('USDT', 'USDC')
                  AND is_error=0
-                 AND timestamp >= ?
+                 {timeframe_condition}
                GROUP BY month"""
                
-        swaps_out_rows = conn.execute(query_swaps_out, (wallet_id, six_months_ago)).fetchall()
-        swaps_in_rows = conn.execute(query_swaps_in, (wallet_id, six_months_ago)).fetchall()
+        swaps_out_rows = conn.execute(query_swaps_out, tuple(query_swaps_params)).fetchall()
+        swaps_in_rows = conn.execute(query_swaps_in, tuple(query_swaps_params)).fetchall()
         
         swaps_map: Dict[str, Dict[str, float]] = {}
         for r in swaps_out_rows:

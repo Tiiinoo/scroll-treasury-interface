@@ -244,14 +244,14 @@ function renderDashboard(budgetComp) {
                     ` : `
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
                         <h3 class="section-title" style="margin-bottom:0;">Monthly Burn Rate</h3>
-                        ${state.activeWallet !== 'committee' && state.activeWallet !== 'delegates' && state.activeWallet !== 'community' && state.activeWallet !== 'ecosystem' ? `
+                        ${state.activeWallet === 'treasury' ? `
                         <div class="currency-toggle">
                             <button class="currency-btn ${state.burnCurrency === 'USD' ? 'active' : ''}" onclick="toggleBurnCurrency('USD')">USD</button>
                             <button class="currency-btn ${state.burnCurrency === 'SCR' ? 'active' : ''}" onclick="toggleBurnCurrency('SCR')">SCR</button>
                         </div>
                         ` : ''}
                     </div>
-                    ${renderMonthlyChart(s.monthly_burn, (state.activeWallet === 'committee' || state.activeWallet === 'delegates' || state.activeWallet === 'community' || state.activeWallet === 'ecosystem') ? 'burn_usdt' : 'burn')}
+                    ${renderMonthlyChart(s.monthly_burn, state.activeWallet === 'treasury' ? 'burn' : 'burn_usdt')}
                     <div class="stat-sub" style="text-align:center; margin-top:8px;">* Calculated at token prices when transactions were performed</div>
                     `}
                 </div>
@@ -535,7 +535,7 @@ function renderBudgetComparison(budgetComp) {
                     <div style="font-size:16px; font-weight:700; color:${subSpentPct > 90 ? 'var(--accent-red)' : 'var(--accent-green)'}">$${formatNumber(totals.treasury_sub_spent_usd || 0)}</div>
                 </div>
             `;
-        } else if (state.activeWallet === 'committee' || state.activeWallet === 'delegates') {
+        } else if (state.activeWallet !== 'treasury') {
             rightSideHtml = `
                 <div style="text-align:right">
                     <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total Spent</div>
@@ -557,7 +557,7 @@ function renderBudgetComparison(budgetComp) {
             <div style="display:flex; justify-content:space-between; margin-bottom:12px">
                 <div>
                     <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Quarterly Limit</div>
-                    <div style="font-size:18px; font-weight:700; color:var(--accent-scroll)">${state.activeWallet === 'committee' || state.activeWallet === 'delegates' ? `${formatNumber(totals.budget_usd)} USDT` : `$${formatNumber(totals.budget_usd)}`}</div>
+                    <div style="font-size:18px; font-weight:700; color:var(--accent-scroll)">${state.activeWallet !== 'treasury' ? `${formatNumber(totals.budget_usd)} USDT` : `$${formatNumber(totals.budget_usd)}`}</div>
                 </div>
                 ${rightSideHtml}
             </div>
@@ -682,7 +682,7 @@ function renderBudgetComparison(budgetComp) {
                     <span class="budget-name" style="font-weight:700">${pool.name} ${tooltipHtml}</span>
                     <span class="budget-amounts">${pool.currency === 'SCR' ?
                     `${formatNumber(pool.spent_scr)} SCR / ${formatNumber(pool.limit)} SCR <span style="font-size:12px;color:var(--text-muted)">(~${formatNumber(pool.spent_usd_native || 0)} USDT ${actionWord})</span>` :
-                    (state.activeWallet === 'committee' || state.activeWallet === 'delegates' ? `${formatNumber(pool.spent)} USDT / ${formatNumber(pool.limit)} USDT` : `$${formatNumber(pool.spent)} / $${formatNumber(pool.limit)}`)}</span>
+                    (state.activeWallet !== 'treasury' ? `${formatNumber(pool.spent)} USDT / ${formatNumber(pool.limit)} USDT` : `$${formatNumber(pool.spent)} / $${formatNumber(pool.limit)}`)}</span>
                 </div>
                 <div class="budget-bar">
                     <div class="budget-fill ${fillClass}" style="width:${Math.min(pct, 100)}%"></div>
@@ -694,7 +694,7 @@ function renderBudgetComparison(budgetComp) {
                         return `
                         <div style="display:flex; justify-content:space-between">
                             <span>${i.category}</span>
-                            <span>${i.currency === 'SCR' ? `${formatNumber(i.spent_scr)} SCR <span style="color:var(--text-muted)">(~${formatNumber(i.spent_usd_native || 0)} USDT ${itemActionWord})</span>` : (state.activeWallet === 'committee' || state.activeWallet === 'delegates' ? `${formatNumber(i.spent_usd)} USDT` : `$${formatNumber(i.spent_usd)}`)}</span>
+                            <span>${i.currency === 'SCR' ? `${formatNumber(i.spent_scr)} SCR <span style="color:var(--text-muted)">(~${formatNumber(i.spent_usd_native || 0)} USDT ${itemActionWord})</span>` : (state.activeWallet !== 'treasury' ? `${formatNumber(i.spent_usd)} USDT` : `$${formatNumber(i.spent_usd)}`)}</span>
                         </div>
                     `}).join('')}
                 </div>
@@ -718,7 +718,7 @@ function renderBudgetComparison(budgetComp) {
                     <span class="budget-name">${c.category} ${tooltipHtml}</span>
                     <span class="budget-amounts">${c.currency === 'SCR' ?
                     `${formatNumber(c.spent_scr || 0)} SCR / ${formatNumber(c.budget_quarterly)} SCR <span style="font-size:12px;color:var(--text-muted)">(~${formatNumber(c.spent_usd_native || 0)} USDT ${actionWord})</span>` :
-                    (state.activeWallet === 'committee' || state.activeWallet === 'delegates' ? `${formatNumber(c.spent_usd)} USDT / ${formatNumber(c.budget_quarterly)} USDT` : `$${formatNumber(c.spent_usd)} / $${formatNumber(c.budget_quarterly)}`)}</span>
+                    (state.activeWallet !== 'treasury' ? `${formatNumber(c.spent_usd)} USDT / ${formatNumber(c.budget_quarterly)} USDT` : `$${formatNumber(c.spent_usd)} / $${formatNumber(c.budget_quarterly)}`)}</span>
                 </div>
                 <div class="budget-bar">
                     <div class="budget-fill ${fillClass}" style="width:${Math.min(pct, 100)}%"></div>
