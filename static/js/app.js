@@ -244,14 +244,14 @@ function renderDashboard(budgetComp) {
                     ` : `
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
                         <h3 class="section-title" style="margin-bottom:0;">Monthly Burn Rate</h3>
-                        ${state.activeWallet !== 'committee' && state.activeWallet !== 'delegates' && state.activeWallet !== 'community' ? `
+                        ${state.activeWallet !== 'committee' && state.activeWallet !== 'delegates' && state.activeWallet !== 'community' && state.activeWallet !== 'ecosystem' ? `
                         <div class="currency-toggle">
                             <button class="currency-btn ${state.burnCurrency === 'USD' ? 'active' : ''}" onclick="toggleBurnCurrency('USD')">USD</button>
                             <button class="currency-btn ${state.burnCurrency === 'SCR' ? 'active' : ''}" onclick="toggleBurnCurrency('SCR')">SCR</button>
                         </div>
                         ` : ''}
                     </div>
-                    ${renderMonthlyChart(s.monthly_burn, (state.activeWallet === 'committee' || state.activeWallet === 'delegates' || state.activeWallet === 'community') ? 'burn_usdt' : 'burn')}
+                    ${renderMonthlyChart(s.monthly_burn, (state.activeWallet === 'committee' || state.activeWallet === 'delegates' || state.activeWallet === 'community' || state.activeWallet === 'ecosystem') ? 'burn_usdt' : 'burn')}
                     <div class="stat-sub" style="text-align:center; margin-top:8px;">* Calculated at token prices when transactions were performed</div>
                     `}
                 </div>
@@ -839,7 +839,8 @@ function renderTransactionsTable() {
             'Governance Facilitator', 'Programme Coordination', 'Marketing Operator',
             'Operations Committee Discretionary Budget', 'Accountability Lead', 'Accountability Operator',
             'Governance Contribution Recognition', 'Delegate Contributions Programme',
-            'Local Nodes', 'Community Support Programme'
+            'Local Nodes', 'Community Support Programme',
+            'Founder Enablement Fund', 'Creator Fund', 'Security Subsidy Programme'
         ];
 
         let customEmoji = '';
