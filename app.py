@@ -583,8 +583,11 @@ def api_stats(wallet_id):
         val = r["value_decimal"]
 
         # Lookup from pre-fetched prices
-        hist_price = price_map.get((sym, tx_date), prices.get(sym, 0))
-        usd_val = val * hist_price
+        if sym in ('USDT', 'USDC'):
+            usd_val = val
+        else:
+            hist_price = price_map.get((sym, tx_date), prices.get(sym, 0))
+            usd_val = val * hist_price
         
         # Calculate SCR value
         scr_val = 0
@@ -843,9 +846,12 @@ def api_budget_comparison(wallet_id):
             tx_date = r["tx_date"]
             val = r["value_decimal"]
             
-            # Lookup from pre-fetched prices
-            hist_price = price_map.get((symbol, tx_date), prices.get(symbol, 0))
-            usd_val = val * hist_price
+            if symbol in ('USDT', 'USDC'):
+                usd_val = val
+            else:
+                hist_price = price_map.get((symbol, tx_date), prices.get(symbol, 0))
+                usd_val = val * hist_price
+                
             spent_usd += usd_val
             
             if symbol == "SCR":
@@ -889,7 +895,8 @@ def api_budget_comparison(wallet_id):
 
     # Overall totals - Original blended logic
     total_spent = sum(r["spent_usd"] for r in result)
-    total_spent_scr = sum(r["spent_scr"] for r in result)
+    total_spent_scr = sum(r["spent_scr"] for r in result if r.get("currency") == "SCR")
+    total_spent_scr_usd_native = sum(r["spent_usd_native"] for r in result if r.get("currency") == "SCR")
     
     # Calculate unique budget limits to avoid multiplying shared pools
     total_budget_usd = 0
@@ -1062,6 +1069,7 @@ def api_budget_comparison(wallet_id):
             "spent_scr": total_spent_scr,
             "spent_usd_native": total_spent_usd_native,
             "spent_scr_native": total_spent_scr_native,
+            "spent_scr_usd_native": total_spent_scr_usd_native,
             "budget_quarterly": wallet_totals.get("quarterly", 0),
             "budget_usd": total_budget_usd,
             "budget_scr": total_budget_scr,

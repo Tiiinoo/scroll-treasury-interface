@@ -244,12 +244,14 @@ function renderDashboard(budgetComp) {
                     ` : `
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
                         <h3 class="section-title" style="margin-bottom:0;">Monthly Burn Rate</h3>
+                        ${state.activeWallet !== 'committee' ? `
                         <div class="currency-toggle">
                             <button class="currency-btn ${state.burnCurrency === 'USD' ? 'active' : ''}" onclick="toggleBurnCurrency('USD')">USD</button>
                             <button class="currency-btn ${state.burnCurrency === 'SCR' ? 'active' : ''}" onclick="toggleBurnCurrency('SCR')">SCR</button>
                         </div>
+                        ` : ''}
                     </div>
-                    ${renderMonthlyChart(s.monthly_burn, 'burn')}
+                    ${renderMonthlyChart(s.monthly_burn, state.activeWallet === 'committee' ? 'burn_usdt' : 'burn')}
                     <div class="stat-sub" style="text-align:center; margin-top:8px;">* Calculated at token prices when transactions were performed</div>
                     `}
                 </div>
@@ -399,8 +401,7 @@ function renderMonthlyChart(monthly, type = 'burn') {
         return '<div class="empty-state"><p>No monthly data yet</p></div>';
     }
 
-    // For standard burn rate or simple transfer totals
-    if (type === 'burn' || type === 'transfers') {
+    if (type === 'burn' || type === 'transfers' || type === 'burn_usdt') {
         const byMonth = {};
         monthly.forEach(m => {
             let val = 0;
@@ -421,6 +422,8 @@ function renderMonthlyChart(monthly, type = 'burn') {
             let valStr = `${formatNumber(total)} USDT`;
             if (type === 'burn') {
                 valStr = state.burnCurrency === 'SCR' ? `${formatNumber(total)} SCR` : `$${formatNumber(total)}`;
+            } else if (type === 'burn_usdt') {
+                valStr = `${formatNumber(total)} USDT`;
             }
             return `<div class="chart-bar-wrap">
                     <div class="chart-value">${valStr}</div>
@@ -592,12 +595,14 @@ function renderBudgetComparison(budgetComp) {
                 </div>
             `;
         } else {
-            rightSideHtmlScr = `
-                <div style="text-align:right">
-                    <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total Spent</div>
-                    <div style="font-size:18px; font-weight:700; color:${scrPct > 90 ? 'var(--accent-red)' : 'var(--accent-green)'}">${formatNumber(totals.spent_scr_native)} SCR</div>
-                </div>
-            `;
+            if (totals.budget_scr > 0) {
+                rightSideHtmlScr = `
+                    <div style="text-align:right">
+                        <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total Spent</div>
+                        <div style="font-size:18px; font-weight:700; color:${scrPct > 90 ? 'var(--accent-red)' : 'var(--accent-green)'}">${formatNumber(totals.spent_scr)} ${state.activeWallet === 'treasury' ? 'SCR' : 'SCR'} <span style="font-size:12px;color:var(--text-muted); font-weight:400">(~${formatNumber(totals.spent_scr_usd_native || 0)} USDT spent)</span></div>
+                    </div>
+                `;
+            }
         }
 
 
@@ -661,7 +666,7 @@ function renderBudgetComparison(budgetComp) {
 
             const tooltipHtml = pool.tooltip ? `<span class="tooltip-icon-category" title="${escapeHtml(pool.tooltip)}">ⓘ</span>` : '';
 
-            const isTransfer = ["Operations Committee Discretionary Budget", "Community Allocation", "Ecosystem Allocation", "Ecosystem Shared Pool", "Community Shared Pool"].includes(pool.name);
+            const isTransfer = state.activeWallet === 'treasury' && ["Operations Committee Discretionary Budget", "Community Allocation", "Ecosystem Allocation", "Ecosystem Shared Pool", "Community Shared Pool"].includes(pool.name);
             const actionWord = isTransfer ? 'transferred' : 'spent';
 
             html += `
@@ -669,7 +674,7 @@ function renderBudgetComparison(budgetComp) {
                 <div class="budget-label">
                     <span class="budget-name" style="font-weight:700">${pool.name} ${tooltipHtml}</span>
                     <span class="budget-amounts">${pool.currency === 'SCR' ?
-                    `${formatNumber(pool.spent_scr)} SCR / ${formatNumber(pool.limit)} SCR <span style="font-size:12px;color:var(--text-muted)">(~$${formatNumber(pool.spent_usd_native || 0)} ${actionWord})</span>` :
+                    `${formatNumber(pool.spent_scr)} SCR / ${formatNumber(pool.limit)} SCR <span style="font-size:12px;color:var(--text-muted)">(~${formatNumber(pool.spent_usd_native || 0)} USDT ${actionWord})</span>` :
                     `$${formatNumber(pool.spent)} / $${formatNumber(pool.limit)}`}</span>
                 </div>
                 <div class="budget-bar">
@@ -678,11 +683,11 @@ function renderBudgetComparison(budgetComp) {
                 <!-- Breakdown -->
                 <div class="shared-breakdown" style="padding-left:16px; margin-top:8px; display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--text-muted)">
                     ${pool.items.map(i => {
-                        const itemActionWord = ["Operations Committee Discretionary Budget", "Community Allocation", "Ecosystem Allocation"].includes(i.category) ? 'transferred' : 'spent';
+                        const itemActionWord = (state.activeWallet === 'treasury' && ["Operations Committee Discretionary Budget", "Community Allocation", "Ecosystem Allocation"].includes(i.category)) ? 'transferred' : 'spent';
                         return `
                         <div style="display:flex; justify-content:space-between">
                             <span>${i.category}</span>
-                            <span>${i.currency === 'SCR' ? `${formatNumber(i.spent_scr)} SCR <span style="color:var(--text-muted)">(~$${formatNumber(i.spent_usd_native || 0)} ${itemActionWord})</span>` : `$${formatNumber(i.spent_usd)}`}</span>
+                            <span>${i.currency === 'SCR' ? `${formatNumber(i.spent_scr)} SCR <span style="color:var(--text-muted)">(~${formatNumber(i.spent_usd_native || 0)} USDT ${itemActionWord})</span>` : `$${formatNumber(i.spent_usd)}`}</span>
                         </div>
                     `}).join('')}
                 </div>
@@ -697,7 +702,7 @@ function renderBudgetComparison(budgetComp) {
 
             const tooltipHtml = c.tooltip ? `<span class="tooltip-icon-category" title="${escapeHtml(c.tooltip)}">ⓘ</span>` : '';
 
-            const isTransfer = ["Operations Committee Discretionary Budget", "Community Allocation", "Ecosystem Allocation"].includes(c.category);
+            const isTransfer = state.activeWallet === 'treasury' && ["Operations Committee Discretionary Budget", "Community Allocation", "Ecosystem Allocation"].includes(c.category);
             const actionWord = isTransfer ? 'transferred' : 'spent';
 
             html += `
@@ -705,7 +710,7 @@ function renderBudgetComparison(budgetComp) {
                 <div class="budget-label">
                     <span class="budget-name">${c.category} ${tooltipHtml}</span>
                     <span class="budget-amounts">${c.currency === 'SCR' ?
-                    `${formatNumber(c.spent_scr || 0)} SCR / ${formatNumber(c.budget_quarterly)} SCR <span style="font-size:12px;color:var(--text-muted)">(~$${formatNumber(c.spent_usd_native || 0)} ${actionWord})</span>` :
+                    `${formatNumber(c.spent_scr || 0)} SCR / ${formatNumber(c.budget_quarterly)} SCR <span style="font-size:12px;color:var(--text-muted)">(~${formatNumber(c.spent_usd_native || 0)} USDT ${actionWord})</span>` :
                     `$${formatNumber(c.spent_usd)} / $${formatNumber(c.budget_quarterly)}`}</span>
                 </div>
                 <div class="budget-bar">
@@ -823,9 +828,14 @@ function renderTransactionsTable() {
 
         const amountClass = tx.category === 'Internal Operations' ? 'neutral' : tx.direction;
 
+        const rightArrowCategories = [
+            'Governance Facilitator', 'Programme Coordination', 'Marketing Operator',
+            'Operations Committee Discretionary Budget', 'Accountability Lead', 'Accountability Operator'
+        ];
+
         let customEmoji = '';
         if (tx.category === 'Uncategorised') customEmoji = '❔ ';
-        else if (isTreasuryTransferCategory || tx.category === 'Internal Transfer') customEmoji = '➡️ ';
+        else if (isTreasuryTransferCategory || tx.category === 'Internal Transfer' || rightArrowCategories.includes(tx.category)) customEmoji = '➡️ ';
         else if (tx.category === 'Internal Operations') customEmoji = '⚙️ ';
         else if (tx.category === 'Treasury Swap') customEmoji = '🔄 ';
         else if (tx.category === 'Incoming Transaction') customEmoji = '⬇️ ';
