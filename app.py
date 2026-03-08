@@ -253,9 +253,13 @@ def api_transactions(wallet_id):
         params.append(wallet_id)
 
     direction = request.args.get("direction")
-    if direction and direction in ("in", "out"):
+    if direction in ("in", "out"):
         conditions.append("direction = ?")
         params.append(direction)
+    elif direction == "fund_movement":
+        conditions.append("category != ?")
+        params.append("Internal Operations")
+        conditions.append("value_decimal > 0")
 
     category = request.args.get("category")
     if category:
@@ -605,6 +609,89 @@ def api_stats(wallet_id):
             "total_scr": data["total_scr"],
         })
     monthly_burn.sort(key=lambda x: x["month"])
+    
+    # Custom Monthly Treasury Datasets
+    treasury_monthly_transfers = []
+    treasury_monthly_swaps = []
+    
+    if wallet_id == 'treasury':
+        # 1. Treasury Transfers/Expenses
+        query_transfers = """SELECT
+                 strftime('%Y-%m', datetime(timestamp, 'unixepoch')) as month,
+                 date(timestamp, 'unixepoch') as tx_date,
+                 token_symbol,
+                 value_decimal
+               FROM transactions
+               WHERE wallet_id=? 
+                     AND direction='out' 
+                     AND is_error=0
+                     AND category NOT IN ('Internal Operations', 'Treasury Swap')
+                     AND timestamp >= ?"""
+        transfers_rows = conn.execute(query_transfers, (wallet_id, six_months_ago)).fetchall()
+        
+        t_transfers_map: Dict[str, float] = {}
+        for r in transfers_rows:
+            month = r["month"]
+            tx_date = r["tx_date"]
+            sym = r["token_symbol"]
+            val = r["value_decimal"]
+            
+            hist_price = price_map.get((sym, tx_date), prices.get(sym, 0))
+            usd_val = val * hist_price
+            
+            t_transfers_map[month] = t_transfers_map.get(month, 0.0) + usd_val
+            
+        for month, total_usd in sorted(t_transfers_map.items()):
+            treasury_monthly_transfers.append({
+                "month": month,
+                "total_usd": total_usd
+            })
+            
+        # 2. Treasury Swaps
+        query_swaps_out = """SELECT
+                 strftime('%Y-%m', datetime(timestamp, 'unixepoch')) as month,
+                 SUM(value_decimal) as val
+               FROM transactions
+               WHERE wallet_id=? 
+                 AND category='Treasury Swap'
+                 AND direction='out'
+                 AND token_symbol='SCR'
+                 AND is_error=0
+                 AND timestamp >= ?
+               GROUP BY month"""
+               
+        query_swaps_in = """SELECT
+                 strftime('%Y-%m', datetime(timestamp, 'unixepoch')) as month,
+                 SUM(value_decimal) as val
+               FROM transactions
+               WHERE wallet_id=? 
+                 AND category='Treasury Swap'
+                 AND direction='in'
+                 AND token_symbol IN ('USDT', 'USDC')
+                 AND is_error=0
+                 AND timestamp >= ?
+               GROUP BY month"""
+               
+        swaps_out_rows = conn.execute(query_swaps_out, (wallet_id, six_months_ago)).fetchall()
+        swaps_in_rows = conn.execute(query_swaps_in, (wallet_id, six_months_ago)).fetchall()
+        
+        swaps_map: Dict[str, Dict[str, float]] = {}
+        for r in swaps_out_rows:
+            month = r["month"]
+            if month not in swaps_map: swaps_map[month] = {"scr_swapped": 0.0, "usdt_obtained": 0.0}
+            swaps_map[month]["scr_swapped"] += r["val"]
+            
+        for r in swaps_in_rows:
+            month = r["month"]
+            if month not in swaps_map: swaps_map[month] = {"scr_swapped": 0.0, "usdt_obtained": 0.0}
+            swaps_map[month]["usdt_obtained"] += r["val"]
+            
+        for month, data in sorted(swaps_map.items()):
+            treasury_monthly_swaps.append({
+                "month": month,
+                "scr_swapped": data["scr_swapped"],
+                "usdt_obtained": data["usdt_obtained"]
+            })
 
     # Transaction count summary
     if wallet_id == 'all':
@@ -644,6 +731,8 @@ def api_stats(wallet_id):
         "balances": balances,
         "spending_by_category": spending,
         "monthly_burn": monthly_burn,
+        "treasury_monthly_transfers": treasury_monthly_transfers,
+        "treasury_monthly_swaps": treasury_monthly_swaps,
         "tx_counts": {
             "total": counts["total"] or 0,
             "incoming": counts["incoming"] or 0,

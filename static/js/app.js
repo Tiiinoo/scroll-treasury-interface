@@ -23,6 +23,8 @@ let state = {
     budgets: null,
     filters: { direction: '', category: '', token: '', date_from: '', date_to: '', search: '' },
     burnCurrency: 'USD',
+    treasuryMonthlyTab: 'transfers',
+    treasurySwapCurrency: 'USDT',
     budgetCurrency: 'USD',
     prices: { ETH: 0, SCR: 0 },
     budgetComp: null,
@@ -212,7 +214,7 @@ function renderDashboard(budgetComp) {
             </div>
         </div>
 
-        <!-- Two-column: Spending by Category + Monthly Burn -->
+        <!-- Two-column: Spending by Category + Monthly Burn / Treasury Activity -->
         <div class="two-col">
             <div class="card">
                 <div class="card-body">
@@ -222,6 +224,24 @@ function renderDashboard(budgetComp) {
             </div>
             <div class="card">
                 <div class="card-body card-body-centered">
+                    ${state.activeWallet === 'treasury' ? `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                        <h3 class="section-title" style="margin-bottom:0;">Monthly Activity</h3>
+                        <div class="currency-toggle">
+                            <button class="currency-btn ${state.treasuryMonthlyTab === 'transfers' ? 'active' : ''}" onclick="toggleTreasuryMonthly('transfers')" style="padding: 4px 8px; font-size: 11px;">Transfers/Expenses</button>
+                            <button class="currency-btn ${state.treasuryMonthlyTab === 'swaps' ? 'active' : ''}" onclick="toggleTreasuryMonthly('swaps')" style="padding: 4px 8px; font-size: 11px;">Treasury Swaps</button>
+                        </div>
+                    </div>
+                    ${state.treasuryMonthlyTab === 'swaps' ? `
+                    <div style="display:flex; justify-content:flex-end; margin-bottom:4px;">
+                        <div class="currency-toggle" style="transform: scale(0.85); transform-origin: right;">
+                            <button class="currency-btn ${state.treasurySwapCurrency === 'USDT' ? 'active' : ''}" onclick="toggleTreasurySwapCurrency('USDT')">USDT</button>
+                            <button class="currency-btn ${state.treasurySwapCurrency === 'SCR' ? 'active' : ''}" onclick="toggleTreasurySwapCurrency('SCR')">SCR</button>
+                        </div>
+                    </div>` : ''}
+                    ${state.treasuryMonthlyTab === 'transfers' ? renderMonthlyChart(s.treasury_monthly_transfers, 'transfers') : renderMonthlyChart(s.treasury_monthly_swaps, 'swaps')}
+                    ${state.treasuryMonthlyTab === 'swaps' ? '<div class="stat-sub" style="text-align:center; margin-top:8px;">* Calculated at token prices when transactions were performed</div>' : ''}
+                    ` : `
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
                         <h3 class="section-title" style="margin-bottom:0;">Monthly Burn Rate</h3>
                         <div class="currency-toggle">
@@ -229,8 +249,9 @@ function renderDashboard(budgetComp) {
                             <button class="currency-btn ${state.burnCurrency === 'SCR' ? 'active' : ''}" onclick="toggleBurnCurrency('SCR')">SCR</button>
                         </div>
                     </div>
-                    ${renderMonthlyChart(s.monthly_burn)}
+                    ${renderMonthlyChart(s.monthly_burn, 'burn')}
                     <div class="stat-sub" style="text-align:center; margin-top:8px;">* Calculated at token prices when transactions were performed</div>
+                    `}
                 </div>
             </div>
         </div>
@@ -268,7 +289,7 @@ function renderDashboard(budgetComp) {
 function renderStatCard(label, value, cls, sub) {
     return `<div class="stat-card">
         <div class="stat-label">${label}</div>
-        <div class="stat-value ${cls}">${formatNumber(value)}</div>
+        <div class="stat-value ${cls}">${formatNumber(value, 0)}</div>
         ${sub ? `<div class="stat-sub">${sub}</div>` : ''}
     </div>`;
 }
@@ -373,37 +394,102 @@ function renderCategoryBreakdown(spending) {
     </ul>`;
 }
 
-function renderMonthlyChart(monthly) {
+function renderMonthlyChart(monthly, type = 'burn') {
     if (!monthly || monthly.length === 0) {
         return '<div class="empty-state"><p>No monthly data yet</p></div>';
     }
-    // Aggregate by month (sum all tokens)
-    const byMonth = {};
-    monthly.forEach(m => {
-        const val = state.burnCurrency === 'SCR' ? (m.total_scr || 0) : (m.total_usd || 0);
-        byMonth[m.month] = (byMonth[m.month] || 0) + val;
-    });
-    const entries = Object.entries(byMonth).sort();
-    const max = Math.max(...entries.map(e => e[1]), 1);
 
-    return `<div class="chart-bars">
-        ${entries.map(([month, total]) => {
-        const pct = (total / max) * 100;
-        const label = month.split('-')[1] + '/' + month.split('-')[0].slice(2);
-        const valStr = state.burnCurrency === 'SCR' ? `${formatNumber(total)} SCR` : `$${formatNumber(total)}`;
-        return `<div class="chart-bar-wrap">
-                <div class="chart-value">${valStr}</div>
-                <div class="chart-bar" style="height:${Math.max(pct, 3)}%; background: linear-gradient(180deg, #FFDCB1 0%, rgba(255, 220, 177, 0.3) 100%);"></div>
-                <div class="chart-label">${label}</div>
-            </div>`;
-    }).join('')}
-    </div>`;
+    // For standard burn rate or simple transfer totals
+    if (type === 'burn' || type === 'transfers') {
+        const byMonth = {};
+        monthly.forEach(m => {
+            let val = 0;
+            if (type === 'burn') {
+                val = state.burnCurrency === 'SCR' ? (m.total_scr || 0) : (m.total_usd || 0);
+            } else {
+                val = m.total_usd || 0;
+            }
+            byMonth[m.month] = (byMonth[m.month] || 0) + val;
+        });
+        const entries = Object.entries(byMonth).sort();
+        const max = Math.max(...entries.map(e => e[1]), 1);
+
+        return `<div class="chart-bars">
+            ${entries.map(([month, total]) => {
+            const pct = (total / max) * 100;
+            const label = month.split('-')[1] + '/' + month.split('-')[0].slice(2);
+            let valStr = `$${formatNumber(total)}`;
+            if (type === 'burn' && state.burnCurrency === 'SCR') {
+                valStr = `${formatNumber(total)} SCR`;
+            }
+            return `<div class="chart-bar-wrap">
+                    <div class="chart-value">${valStr}</div>
+                    <div class="chart-bar" style="height:${Math.max(pct, 3)}%; background: linear-gradient(180deg, #FFDCB1 0%, rgba(255, 220, 177, 0.3) 100%);"></div>
+                    <div class="chart-label">${label}</div>
+                </div>`;
+        }).join('')}
+        </div>`;
+    }
+
+    // For Treasury Swaps: display SCR out or USDT in based on toggle
+    if (type === 'swaps') {
+        const entries = [...monthly].sort((a, b) => a.month.localeCompare(b.month));
+
+        let max = 1;
+        if (state.treasurySwapCurrency === 'USDT') {
+            max = Math.max(...entries.map(e => e.usdt_obtained || 0), 1);
+        } else {
+            max = Math.max(...entries.map(e => e.scr_swapped || 0), 1);
+        }
+
+        return `<div class="chart-bars">
+            ${entries.map(data => {
+            const isUsdt = state.treasurySwapCurrency === 'USDT';
+            const val = isUsdt ? data.usdt_obtained : data.scr_swapped;
+            const pct = (val / max) * 100;
+            const label = data.month.split('-')[1] + '/' + data.month.split('-')[0].slice(2);
+
+            const barGradient = isUsdt
+                ? 'linear-gradient(180deg, rgba(52, 211, 153, 0.8) 0%, rgba(52, 211, 153, 0.2) 100%)'
+                : 'linear-gradient(180deg, rgba(248, 113, 113, 0.8) 0%, rgba(248, 113, 113, 0.2) 100%)';
+            const valColor = isUsdt ? 'var(--accent-green)' : 'var(--accent-red)';
+            const valPrefix = isUsdt ? '$' : '';
+            const valSuffix = isUsdt ? '' : ' SCR';
+            const topLabel = isUsdt
+                ? `<div class="chart-value" style="font-size:10px; color:var(--text-muted);">${formatNumber(data.scr_swapped)} SCR <br/>↓<br/></div>`
+                : `<div class="chart-value" style="font-size:10px; color:var(--text-muted);">$${formatNumber(data.usdt_obtained)} <br/>↑<br/></div>`;
+
+            return `<div class="chart-bar-wrap" style="width: auto; min-width: 60px;">
+                    ${topLabel}
+                    <div class="chart-value" style="color:${valColor};">${valPrefix}${formatNumber(val)}${valSuffix}</div>
+                    <div class="chart-bar" style="height:${Math.max(pct, 3)}%; background: ${barGradient};"></div>
+                    <div class="chart-label">${label}</div>
+                </div>`;
+        }).join('')}
+        </div>`;
+    }
 }
 
 function toggleBurnCurrency(curr) {
     if (state.burnCurrency === curr) return;
     state.burnCurrency = curr;
     // Re-render from cached state instead of re-fetching
+    if (state.budgetComp) {
+        renderDashboard(state.budgetComp);
+    }
+}
+
+function toggleTreasuryMonthly(tab) {
+    if (state.treasuryMonthlyTab === tab) return;
+    state.treasuryMonthlyTab = tab;
+    if (state.budgetComp) {
+        renderDashboard(state.budgetComp);
+    }
+}
+
+function toggleTreasurySwapCurrency(curr) {
+    if (state.treasurySwapCurrency === curr) return;
+    state.treasurySwapCurrency = curr;
     if (state.budgetComp) {
         renderDashboard(state.budgetComp);
     }
@@ -490,10 +576,10 @@ function renderBudgetComparison(budgetComp) {
                     <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total Swapped to USDT</div>
                     <div style="font-size:16px; font-weight:700; color:${swappedPct > 90 ? 'var(--accent-red)' : 'var(--accent-green)'}; margin-bottom:8px">${formatNumber(totals.treasury_scr_swapped || 0)} SCR</div>
 
-                    <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total USDT Available</div>
+                    <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total USDT Obtained</div>
                     <div style="font-size:16px; font-weight:700; color:var(--text-main); margin-bottom:8px">$${formatNumber(totals.treasury_usdt_available_from_swap || 0)}</div>
 
-                    <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total Transferred to other DAO Multisigs <span class="tooltip-icon" title="Transferred to the Community Allocations and Ecosystem Allocations Multisigs">ⓘ</span></div>
+                    <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total USDT Transferred to other DAO Multisigs <span class="tooltip-icon" title="Transferred to the Community Allocations and Ecosystem Allocations Multisigs">ⓘ</span></div>
                     <div style="font-size:16px; font-weight:700; color:var(--text-main); margin-bottom:8px">$${formatNumber(totals.treasury_transferred_scr_initiatives || 0)}</div>
 
                     <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total USDT Spent <span class="tooltip-icon" title="Spent by the Community Allocations and Ecosystem Allocations Multisigs">ⓘ</span></div>
@@ -644,9 +730,10 @@ function renderFilters() {
 
     return `<div class="tx-controls">
         <select onchange="applyFilter('direction', this.value)">
-            <option value="">All Directions</option>
+            <option value="">All Transactions</option>
             <option value="in" ${state.filters.direction === 'in' ? 'selected' : ''}>Incoming</option>
             <option value="out" ${state.filters.direction === 'out' ? 'selected' : ''}>Outgoing</option>
+            <option value="fund_movement" ${state.filters.direction === 'fund_movement' ? 'selected' : ''}>Fund Movements</option>
         </select>
         <select onchange="applyFilter('category', this.value)">
             <option value="">All Categories</option>
@@ -721,8 +808,9 @@ function renderTransactionsTable() {
         } else {
             notesCell = `<span class="tx-note-text" title="${escapeHtml(tx.notes)}">${escapeHtml(tx.notes)}</span>`;
         }
-
-        const signersHtml = formatSigners(tx.signers);
+        // Only show signers if the transaction is outgoing from THIS multisig AND not an internal operation
+        const hideSigners = tx.direction === 'in' || tx.category === 'Internal Operations';
+        const signersHtml = hideSigners ? formatSigners('') : formatSigners(tx.signers);
 
         // Specific categories are treated as non-expenses ONLY when transferred from the Treasury directly
         const isTreasuryTransferCategory = ['Operations & Accountability Committee', 'Delegates Incentives', 'Operations Committee Discretionary Budget', 'Community Allocation', 'Ecosystem Allocation'].includes(tx.category);
@@ -851,19 +939,15 @@ async function logout() {
 
 // ── Utilities ───────────────────────────────────────────────────────────
 
-function formatNumber(n) {
-    if (n === undefined || n === null) return '0';
-    return Number(n).toLocaleString('en-US');
+function formatNumber(n, decimals = 2) {
+    if (n === undefined || n === null) return (0).toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    return Number(n).toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
 function formatTokenAmount(amount, symbol) {
-    if (amount === undefined || amount === null) return '0';
+    if (amount === undefined || amount === null) return '0.00';
     const n = Number(amount);
-    if (n === 0) return '0';
-    if (Math.abs(n) < 0.001) return n.toFixed(8);
-    if (Math.abs(n) < 1) return n.toFixed(6);
-    if (Math.abs(n) < 1000) return n.toFixed(4);
-    return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
+    return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function shortenAddr(addr) {

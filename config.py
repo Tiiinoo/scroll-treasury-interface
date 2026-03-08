@@ -84,6 +84,26 @@ SIGNER_ALIASES = {
         "0x558581b0345D986bA5bD6f04Efd27e2a5B991320": "Scroll Foundation",
         "0x1Da431d2D5ECA4Df735F69fB5ea10c8E630b8f50": "Scroll Foundation",
         "0xbc72d9f10F6626271092764467983122cF15E3f4": "Accountability"
+    },
+    "committee": {
+        "0x73506528332BEcf6121F71AC9aaD43646a41994C": "SEEDGov",
+        "0x558581b0345D986bA5bD6f04Efd27e2a5B991320": "Scroll Foundation",
+        "0xbc72d9f10F6626271092764467983122cF15E3f4": "Accountability"
+    },
+    "delegates": {
+        "0x73506528332BEcf6121F71AC9aaD43646a41994C": "SEEDGov",
+        "0x558581b0345D986bA5bD6f04Efd27e2a5B991320": "Scroll Foundation",
+        "0xbc72d9f10F6626271092764467983122cF15E3f4": "Accountability"
+    },
+    "community": {
+        "0x73506528332BEcf6121F71AC9aaD43646a41994C": "SEEDGov",
+        "0x558581b0345D986bA5bD6f04Efd27e2a5B991320": "Scroll Foundation",
+        "0xbc72d9f10F6626271092764467983122cF15E3f4": "Accountability"
+    },
+    "ecosystem": {
+        "0x73506528332BEcf6121F71AC9aaD43646a41994C": "SEEDGov",
+        "0x558581b0345D986bA5bD6f04Efd27e2a5B991320": "Scroll Foundation",
+        "0xbc72d9f10F6626271092764467983122cF15E3f4": "Accountability"
     }
 }
 
