@@ -496,8 +496,8 @@ def api_stats(wallet_id):
         
         # Map the category if it's the Treasury
         if wallet_id == 'treasury':
-            fiat_group = ["Operations & Accountability Committee", "Delegates Incentives", "Operations Committee Discretionary Budget"]
-            token_group = ["Community Allocation", "Ecosystem Allocation"]
+            fiat_group = ["Operations & Accountability Committee", "Delegates Incentives"]
+            token_group = ["Community Allocation", "Ecosystem Allocation", "Operations Committee Discretionary Budget"]
             
             if cat in fiat_group or (cat == 'Internal Transfer' and sym in ['USDT', 'USDC']):
                 cat = "Fiat Transfers (USDT)"
@@ -521,6 +521,12 @@ def api_stats(wallet_id):
         cat_spending[k]["total"] += val
         cat_spending[k]["total_usd"] += usd_val
         cat_spending[k]["count"] += 1
+
+    # Override Treasury Swaps USD value with the actual USDT obtained
+    if wallet_id == 'treasury' and ("Treasury Swaps", "SCR") in cat_spending:
+        swap_usdt_in_query = "SELECT SUM(value_decimal) as val FROM transactions WHERE category='Treasury Swap' AND direction='in' AND token_symbol IN ('USDT', 'USDC')"
+        total_usdt_in = conn.execute(swap_usdt_in_query).fetchone()["val"] or 0
+        cat_spending[("Treasury Swaps", "SCR")]["total_usd"] = total_usdt_in
 
     # Convert to list
     for (cat, sym), data in cat_spending.items():
@@ -861,6 +867,12 @@ def api_budget_comparison(wallet_id):
         # Helper to avoid linter confusion
         budget_q = float(budget.get("quarterly", 0))
 
+        # Explicitly override Treasury Swaps USD value to reflect actual obtained USDT, 
+        # instead of the historical USD value of the SCR spent.
+        if cat == "Treasury Swaps":
+            spent_usd = total_usdt_in
+            cat_spent_usd_native = total_usdt_in
+
         result.append({
             "category": cat,
             "spent_usd": spent_usd,
@@ -936,7 +948,7 @@ def api_budget_comparison(wallet_id):
             '0x7964e7bf48948c9e1d89f419cad8ef7d8d8f0434'  # delegates
         ]
         
-        ops_categories_tuple = "('Internal Transfer', 'Operations & Accountability Committee', 'Delegates Incentives', 'Operations Committee Discretionary Budget')"
+        ops_categories_tuple = "('Internal Transfer', 'Operations & Accountability Committee', 'Delegates Incentives')"
         transferred_query = f"""SELECT token_symbol, value_decimal, date(timestamp, 'unixepoch') as tx_date 
                              FROM transactions 
                              WHERE wallet_id='treasury' AND direction='out' AND category IN {ops_categories_tuple}
@@ -947,8 +959,11 @@ def api_budget_comparison(wallet_id):
             symbol = r["token_symbol"]
             tx_date = r["tx_date"]
             val = r["value_decimal"]
-            hist_price = price_map.get((symbol, tx_date), prices.get(symbol, 0))
-            treasury_transferred_usd += (val * hist_price)
+            if symbol in ('USDT', 'USDC'):
+                treasury_transferred_usd += val
+            else:
+                hist_price = price_map.get((symbol, tx_date), prices.get(symbol, 0))
+                treasury_transferred_usd += (val * hist_price)
 
         # Calculate subsidiary spent (Ops & Delegates)
         qs = ','.join(['?']*len(NON_EXPENSE_CATEGORIES))
@@ -963,8 +978,11 @@ def api_budget_comparison(wallet_id):
             symbol = r["token_symbol"]
             tx_date = r["tx_date"]
             val = r["value_decimal"]
-            hist_price = price_map.get((symbol, tx_date), prices.get(symbol, 0))
-            treasury_sub_spent_usd += (val * hist_price)
+            if symbol in ('USDT', 'USDC'):
+                treasury_sub_spent_usd += val
+            else:
+                hist_price = price_map.get((symbol, tx_date), prices.get(symbol, 0))
+                treasury_sub_spent_usd += (val * hist_price)
             
         # SCR Part: Swapped, Available, Transferred, Sub-Spent
         # 1. Swapped SCR to USDT
@@ -981,7 +999,7 @@ def api_budget_comparison(wallet_id):
         row = conn.execute(available_query).fetchone()
         treasury_usdt_available_from_swap = row["val"] if row and row["val"] else 0
 
-        # 3. Transferred USDT to Community & Ecosystem
+        # 3. Transferred USDT to Community & Ecosystem (& Ops Discretionary)
         ecosystem_addresses = [
             '0x756ed67a0e73dd1ec4facbc307ca79c28d930b20', # community
             '0xe47b51a31ad43acb72a224fab4a17999311e2e48'  # ecosystem
@@ -996,8 +1014,26 @@ def api_budget_comparison(wallet_id):
             symbol = r["token_symbol"]
             tx_date = r["tx_date"]
             val = r["value_decimal"]
-            hist_price = price_map.get((symbol, tx_date), prices.get(symbol, 0))
-            treasury_transferred_scr_initiatives += (val * hist_price)
+            if symbol in ('USDT', 'USDC'):
+                treasury_transferred_scr_initiatives += val
+            else:
+                hist_price = price_map.get((symbol, tx_date), prices.get(symbol, 0))
+                treasury_transferred_scr_initiatives += (val * hist_price)
+            
+        ops_discretionary_query = f"""SELECT token_symbol, value_decimal, date(timestamp, 'unixepoch') as tx_date 
+                             FROM transactions 
+                             WHERE wallet_id='treasury' AND direction='out' AND category = 'Operations Committee Discretionary Budget'
+                             AND LOWER(to_address) = ?"""
+        ops_discretionary_rows = conn.execute(ops_discretionary_query, ('0xd0d05390d922a2c45a70eaa4601600f236c02acc',)).fetchall()
+        for r in ops_discretionary_rows:
+            symbol = r["token_symbol"]
+            tx_date = r["tx_date"]
+            val = r["value_decimal"]
+            if symbol in ('USDT', 'USDC'):
+                treasury_transferred_scr_initiatives += val
+            else:
+                hist_price = price_map.get((symbol, tx_date), prices.get(symbol, 0))
+                treasury_transferred_scr_initiatives += (val * hist_price)
 
         # 4. USDT Spent by Community & Ecosystem
         sub_spent_eco_query = f"""SELECT token_symbol, value_decimal, date(timestamp, 'unixepoch') as tx_date 
@@ -1011,8 +1047,11 @@ def api_budget_comparison(wallet_id):
             symbol = r["token_symbol"]
             tx_date = r["tx_date"]
             val = r["value_decimal"]
-            hist_price = price_map.get((symbol, tx_date), prices.get(symbol, 0))
-            treasury_spent_scr_initiatives_usd += (val * hist_price)
+            if symbol in ('USDT', 'USDC'):
+                treasury_spent_scr_initiatives_usd += val
+            else:
+                hist_price = price_map.get((symbol, tx_date), prices.get(symbol, 0))
+                treasury_spent_scr_initiatives_usd += (val * hist_price)
 
 
     return jsonify({

@@ -387,7 +387,7 @@ function renderCategoryBreakdown(spending) {
                 </div>
                 <div class="category-amount">
                     <div>${tokenStr}</div>
-                    <div class="amount-usd">$${formatNumber(catTotalUsd)}</div>
+                    <div class="amount-usd">${cat === 'Treasury Swaps' ? `${formatNumber(catTotalUsd)} USDT` : `$${formatNumber(catTotalUsd)}`}</div>
                 </div>
             </li>`;
     }).join('')}
@@ -418,9 +418,9 @@ function renderMonthlyChart(monthly, type = 'burn') {
             ${entries.map(([month, total]) => {
             const pct = (total / max) * 100;
             const label = month.split('-')[1] + '/' + month.split('-')[0].slice(2);
-            let valStr = `$${formatNumber(total)}`;
-            if (type === 'burn' && state.burnCurrency === 'SCR') {
-                valStr = `${formatNumber(total)} SCR`;
+            let valStr = `${formatNumber(total)} USDT`;
+            if (type === 'burn') {
+                valStr = state.burnCurrency === 'SCR' ? `${formatNumber(total)} SCR` : `$${formatNumber(total)}`;
             }
             return `<div class="chart-bar-wrap">
                     <div class="chart-value">${valStr}</div>
@@ -453,11 +453,11 @@ function renderMonthlyChart(monthly, type = 'burn') {
                 ? 'linear-gradient(180deg, rgba(52, 211, 153, 0.8) 0%, rgba(52, 211, 153, 0.2) 100%)'
                 : 'linear-gradient(180deg, rgba(248, 113, 113, 0.8) 0%, rgba(248, 113, 113, 0.2) 100%)';
             const valColor = isUsdt ? 'var(--accent-green)' : 'var(--accent-red)';
-            const valPrefix = isUsdt ? '$' : '';
-            const valSuffix = isUsdt ? '' : ' SCR';
+            const valPrefix = '';
+            const valSuffix = isUsdt ? ' USDT' : ' SCR';
             const topLabel = isUsdt
                 ? `<div class="chart-value" style="font-size:10px; color:var(--text-muted);">${formatNumber(data.scr_swapped)} SCR <br/>↓<br/></div>`
-                : `<div class="chart-value" style="font-size:10px; color:var(--text-muted);">$${formatNumber(data.usdt_obtained)} <br/>↑<br/></div>`;
+                : `<div class="chart-value" style="font-size:10px; color:var(--text-muted);">${formatNumber(data.usdt_obtained)} USDT <br/>↑<br/></div>`;
 
             return `<div class="chart-bar-wrap" style="width: auto; min-width: 60px;">
                     ${topLabel}
@@ -571,6 +571,8 @@ function renderBudgetComparison(budgetComp) {
         if (state.activeWallet === 'treasury') {
             const swappedPct = totals.budget_scr > 0 ? ((totals.treasury_scr_swapped || 0) / totals.budget_scr * 100) : 0;
             const subSpentEcoPct = totals.treasury_transferred_scr_initiatives > 0 ? ((totals.treasury_spent_scr_initiatives_usd || 0) / totals.treasury_transferred_scr_initiatives * 100) : 0;
+            const remainingUsdt = (totals.treasury_usdt_available_from_swap || 0) - (totals.treasury_transferred_scr_initiatives || 0);
+
             rightSideHtmlScr = `
                 <div style="text-align:right">
                     <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total Swapped to USDT</div>
@@ -579,8 +581,11 @@ function renderBudgetComparison(budgetComp) {
                     <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total USDT Obtained</div>
                     <div style="font-size:16px; font-weight:700; color:var(--text-main); margin-bottom:8px">$${formatNumber(totals.treasury_usdt_available_from_swap || 0)}</div>
 
-                    <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total USDT Transferred to other DAO Multisigs <span class="tooltip-icon" title="Transferred to the Community Allocations and Ecosystem Allocations Multisigs">ⓘ</span></div>
+                    <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total USDT Transferred to other DAO Multisigs <span class="tooltip-icon" title="Transferred to the Community Allocations, Ecosystem Allocations, and Operations & Accountability (Discretionary Budget) Multisigs">ⓘ</span></div>
                     <div style="font-size:16px; font-weight:700; color:var(--text-main); margin-bottom:8px">$${formatNumber(totals.treasury_transferred_scr_initiatives || 0)}</div>
+
+                    <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Remaining USDT</div>
+                    <div style="font-size:16px; font-weight:700; color:var(--text-main); margin-bottom:8px">$${formatNumber(remainingUsdt)}</div>
 
                     <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total USDT Spent <span class="tooltip-icon" title="Spent by the Community Allocations and Ecosystem Allocations Multisigs">ⓘ</span></div>
                     <div style="font-size:16px; font-weight:700; color:${subSpentEcoPct > 90 ? 'var(--accent-red)' : 'var(--accent-green)'}">$${formatNumber(totals.treasury_spent_scr_initiatives_usd || 0)}</div>
