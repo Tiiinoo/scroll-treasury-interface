@@ -136,6 +136,7 @@ CATEGORIES = {
         "Treasury Swap",
         "Internal Transfer",
         "Incoming Transaction",
+        "Funds from the Previous DAO Treasury",
     ],
     "committee": [
         "Uncategorised",
@@ -177,6 +178,7 @@ CATEGORIES = {
         "Treasury Swap",
         "Internal Transfer",
         "Incoming Transaction",
+        "Funds from the Previous DAO Treasury",
     ],
 }
 

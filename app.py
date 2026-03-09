@@ -382,6 +382,7 @@ def api_categorise(tx_id):
         (category, notes, tx_id),
     )
     conn.commit()
+    cache.clear()
 
     return jsonify({"success": True, "id": tx_id, "category": category, "notes": notes})
 
@@ -405,6 +406,7 @@ def api_bulk_categorise():
         )
         updated += cursor.rowcount
     conn.commit()
+    cache.clear()
 
     return jsonify({"success": True, "updated": updated})
 
@@ -459,7 +461,7 @@ def api_stats(wallet_id):
                  value_decimal,
                  date(timestamp, 'unixepoch') as tx_date
                FROM transactions
-               WHERE direction='out' 
+               WHERE (direction='out' OR category = 'Funds from the Previous DAO Treasury') 
                  AND is_error=0
                  AND category NOT IN ({qs})"""
         params = list(NON_EXPENSE_CATEGORIES)
@@ -473,7 +475,7 @@ def api_stats(wallet_id):
                  date(timestamp, 'unixepoch') as tx_date
                FROM transactions
                WHERE wallet_id=? 
-                 AND direction='out' 
+                 AND (direction='out' OR category = 'Funds from the Previous DAO Treasury')
                  AND is_error=0
                  AND category != 'Internal Operations' AND value_decimal > 0"""
         params = [wallet_id]
@@ -485,7 +487,7 @@ def api_stats(wallet_id):
                  date(timestamp, 'unixepoch') as tx_date
                FROM transactions
                WHERE wallet_id=? 
-                 AND direction='out' 
+                 AND (direction='out' OR category = 'Funds from the Previous DAO Treasury') 
                  AND is_error=0
                  AND category NOT IN ({qs})"""
         params = [wallet_id] + list(NON_EXPENSE_CATEGORIES)
@@ -513,6 +515,8 @@ def api_stats(wallet_id):
                 cat = "Treasury Swaps"
             elif cat == "General Purpose DAO Budget":
                 cat = "Direct DAO Spend"
+            elif cat == "Funds from the Previous DAO Treasury":
+                cat = "Funds from the Previous DAO Treasury"
             else:
                 cat = "Other Transfers"
 
@@ -846,7 +850,7 @@ def api_budget_comparison(wallet_id):
     total_spent_scr_native = 0
 
     for cat in categories:
-        if cat == "Uncategorised":
+        if cat in ["Uncategorised", "Funds from the Previous DAO Treasury"]:
             continue
         
         # Check for override first

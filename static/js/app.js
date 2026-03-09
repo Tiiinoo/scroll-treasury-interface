@@ -381,6 +381,15 @@ function renderCategoryBreakdown(spending) {
         // Re-calculating total USD from the input 'spending' array which now has 'total_usd'
         const catTotalUsd = spending.filter(s => s.category === cat).reduce((acc, s) => acc + (s.total_usd || 0), 0);
 
+        let amountStr = '';
+        if (cat === 'Treasury Swaps') {
+            amountStr = `${formatNumber(catTotalUsd)} USDT`;
+        } else if (cat === 'Funds from the Previous DAO Treasury') {
+            amountStr = `$${formatNumber(catTotalUsd)}`;
+        } else {
+            amountStr = `$${formatNumber(catTotalUsd)}`;
+        }
+
         return `<li class="category-item">
                 <span class="category-dot" style="background:${CATEGORY_COLOURS[i % CATEGORY_COLOURS.length]}"></span>
                 <div class="category-info">
@@ -389,7 +398,7 @@ function renderCategoryBreakdown(spending) {
                 </div>
                 <div class="category-amount">
                     <div>${tokenStr}</div>
-                    <div class="amount-usd">${cat === 'Treasury Swaps' ? `${formatNumber(catTotalUsd)} USDT` : `$${formatNumber(catTotalUsd)}`}</div>
+                    <div class="amount-usd">${amountStr}</div>
                 </div>
             </li>`;
     }).join('')}
@@ -850,6 +859,7 @@ function renderTransactionsTable() {
         else if (tx.category === 'Treasury Swap') customEmoji = '🔄 ';
         else if (tx.category === 'Incoming Transaction') customEmoji = '⬇️ ';
         else if (tx.category === 'General Purpose DAO Budget' && tx.direction === 'out') customEmoji = '💸 ';
+        else if (tx.category === 'Funds from the Previous DAO Treasury') customEmoji = '🏛️ ';
 
         const amountSign = tx.category === 'Internal Operations' ? customEmoji : (tx.direction === 'in' ? `${customEmoji}+` : `${customEmoji}-`);
         const amountHtml = `<span class="tx-amount ${amountClass}">${amountSign}${formatTokenAmount(tx.value_decimal, tx.token_symbol)} ${escapeHtml(tx.token_symbol)}</span>`;
