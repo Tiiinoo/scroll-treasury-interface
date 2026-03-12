@@ -606,7 +606,7 @@ function renderBudgetComparison(budgetComp) {
                     <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Remaining USDT</div>
                     <div style="font-size:16px; font-weight:700; color:var(--text-main); margin-bottom:8px">$${formatNumber(remainingUsdt)}</div>
 
-                    <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total USDT Spent <span class="tooltip-icon" title="Spent by the Community Allocations and Ecosystem Allocations Multisigs">ⓘ</span></div>
+                    <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total USDT Spent <span class="tooltip-icon" title="Spent by the Community Allocations, Ecosystem Allocations, and Operations & Accountability (Discretionary Budget) Multisigs">ⓘ</span></div>
                     <div style="font-size:16px; font-weight:700; color:${subSpentEcoPct > 90 ? 'var(--accent-red)' : 'var(--accent-green)'}">$${formatNumber(totals.treasury_spent_scr_initiatives_usd || 0)}</div>
                 </div>
             `;

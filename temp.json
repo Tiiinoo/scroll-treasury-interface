@@ -1,0 +1,148 @@
+{
+  "categories": [
+    {
+      "budget_quarterly": 69000.0,
+      "category": "Operations & Accountability Committee",
+      "currency": "USD",
+      "group": "Operations",
+      "shared_id": null,
+      "spent_scr": 842188.140372257,
+      "spent_usd": 23000.0,
+      "spent_usd_native": 23000.0,
+      "tooltip": null
+    },
+    {
+      "budget_quarterly": 738916.26,
+      "category": "General Purpose DAO Budget",
+      "currency": "SCR",
+      "group": "DAO Initiatives",
+      "shared_id": null,
+      "spent_scr": 0,
+      "spent_usd": 0,
+      "spent_usd_native": 0,
+      "tooltip": "Originally approved as $60k/quarter, calculated at $0.0812 TWAP from January 6, when the budget proposal was approved."
+    },
+    {
+      "budget_quarterly": 60000.0,
+      "category": "Delegates Incentives",
+      "currency": "USD",
+      "group": "Operations",
+      "shared_id": null,
+      "spent_scr": 0,
+      "spent_usd": 0,
+      "spent_usd_native": 0,
+      "tooltip": null
+    },
+    {
+      "budget_quarterly": 61576.35,
+      "category": "Operations Committee Discretionary Budget",
+      "currency": "SCR",
+      "group": "Operations",
+      "shared_id": null,
+      "spent_scr": 8951.36142588704,
+      "spent_usd": 244.46,
+      "spent_usd_native": 244.46,
+      "tooltip": "Originally approved as $5k/quarter, calculated at $0.0812 TWAP from January 6, when the budget proposal was approved."
+    },
+    {
+      "budget_quarterly": 985221.67,
+      "category": "Community Allocation",
+      "currency": "SCR",
+      "group": "Ecosystem Programmes",
+      "shared_id": null,
+      "spent_scr": 0,
+      "spent_usd": 0,
+      "spent_usd_native": 0,
+      "tooltip": "Originally approved as $80k/quarter, calculated at $0.0812 TWAP from January 6, when the budget proposal was approved."
+    },
+    {
+      "budget_quarterly": 1231527.09,
+      "category": "Ecosystem Allocation",
+      "currency": "SCR",
+      "group": "Ecosystem Programmes",
+      "shared_id": null,
+      "spent_scr": 448629.9606887344,
+      "spent_usd": 12252.0,
+      "spent_usd_native": 12252.0,
+      "tooltip": "Originally approved as $100k/quarter, calculated at $0.0812 TWAP from January 6, when the budget proposal was approved."
+    },
+    {
+      "budget_quarterly": 0.0,
+      "category": "Internal Operations",
+      "currency": "USD",
+      "group": "Other",
+      "shared_id": null,
+      "spent_scr": 0,
+      "spent_usd": 0,
+      "spent_usd_native": 0,
+      "tooltip": null
+    },
+    {
+      "budget_quarterly": 0.0,
+      "category": "Treasury Swap",
+      "currency": "USD",
+      "group": "Other",
+      "shared_id": null,
+      "spent_scr": 0,
+      "spent_usd": 0,
+      "spent_usd_native": 0,
+      "tooltip": null
+    },
+    {
+      "budget_quarterly": 0.0,
+      "category": "Internal Transfer",
+      "currency": "USD",
+      "group": "Other",
+      "shared_id": null,
+      "spent_scr": 0,
+      "spent_usd": 0,
+      "spent_usd_native": 0,
+      "tooltip": null
+    },
+    {
+      "budget_quarterly": 0.0,
+      "category": "Incoming Transaction",
+      "currency": "USD",
+      "group": "Other",
+      "shared_id": null,
+      "spent_scr": 0,
+      "spent_usd": 0,
+      "spent_usd_native": 0,
+      "tooltip": null
+    }
+  ],
+  "groups": [
+    "Operations",
+    "DAO Initiatives",
+    "Delegate Incentive Programmes",
+    "Operations Committee",
+    "Accountability Committee",
+    "Ecosystem Programmes",
+    "Community Programmes"
+  ],
+  "prices": {
+    "DAI": 0.9999132816288493,
+    "ETH": 2061.036788411049,
+    "SCR": 0.04304114078208136,
+    "USDC": 1.0000063443055844,
+    "USDT": 1.000048083338455,
+    "WBTC": 70370.49145664438,
+    "WETH": 2058.4367657623447
+  },
+  "totals": {
+    "budget_quarterly": 374000,
+    "budget_scr": 3017241.37,
+    "budget_usd": 129000.0,
+    "spent": 35496.46,
+    "spent_scr": 457581.32211462146,
+    "spent_scr_native": 0,
+    "spent_scr_usd_native": 12496.46,
+    "spent_usd_native": 23000.0,
+    "treasury_scr_swapped": 702620.12,
+    "treasury_spent_scr_initiatives_usd": 12496.46,
+    "treasury_sub_spent_usd": 23000.0,
+    "treasury_transferred_scr_initiatives": 12496.46,
+    "treasury_transferred_usd": 23000.0,
+    "treasury_usdt_available_from_swap": 29344.26
+  }
+}

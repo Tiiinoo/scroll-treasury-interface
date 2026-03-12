@@ -115,12 +115,7 @@ SIGNER_ALIASES = {
 NON_EXPENSE_CATEGORIES = [
     "Internal Operations",
     "Treasury Swap",
-    "Internal Transfer",
-    "Operations & Accountability Committee",
-    "Delegates Incentives",
-    "Operations Committee Discretionary Budget",
-    "Community Allocation",
-    "Ecosystem Allocation"
+    "Internal Transfer"
 ]
 
 CATEGORIES = {
