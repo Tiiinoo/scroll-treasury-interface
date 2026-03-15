@@ -21,7 +21,7 @@ let state = {
     stats: null,
     transactions: { items: [], total: 0, offset: 0, limit: 50 },
     budgets: null,
-    filters: { direction: '', category: '', token: '', date_from: '', date_to: '', search: '' },
+    filters: { direction: 'fund_movement', category: '', token: '', date_from: '', date_to: '', search: '' },
     burnCurrency: 'USD',
     treasuryMonthlyTab: 'transfers',
     treasurySwapCurrency: 'USDT',
@@ -113,7 +113,7 @@ async function loadBudgetComparison(walletId) {
 async function selectWallet(walletId) {
     state.activeWallet = walletId;
     state.transactions.offset = 0;
-    state.filters = { direction: '', category: '', token: '', date_from: '', date_to: '', search: '' };
+    state.filters = { direction: 'fund_movement', category: '', token: '', date_from: '', date_to: '', search: '' };
 
     // Save to localStorage
     localStorage.setItem('scrollTreasury_activeWallet', walletId);
