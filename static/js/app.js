@@ -38,6 +38,14 @@ const CATEGORY_COLOURS = [
     '#84cc16', '#14b8a6',
 ];
 
+const DOCS_URLS = {
+    treasury:  'https://docs.scrolldaotreasury.com/tabs/tabs-guide/scroll-dao-treasury-multisig',
+    committee: 'https://docs.scrolldaotreasury.com/tabs/tabs-guide/operations-and-accountability-committee-multisig',
+    delegates: 'https://docs.scrolldaotreasury.com/tabs/tabs-guide/delegates-incentives-multisig',
+    community: 'https://docs.scrolldaotreasury.com/tabs/tabs-guide/community-allocation-multisig',
+    ecosystem: 'https://docs.scrolldaotreasury.com/tabs/tabs-guide/ecosystem-allocation-multisig',
+};
+
 // ── Initialise ──────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -201,7 +209,9 @@ function renderDashboard(budgetComp) {
         return;
     }
 
+    const docsUrl = DOCS_URLS[state.activeWallet];
     content.innerHTML = `
+        ${docsUrl ? `<div class="docs-link-bar"><a href="${docsUrl}" target="_blank" rel="noopener noreferrer" class="docs-link">Learn More About this Tab →</a></div>` : ''}
         <!-- Stats Cards -->
         <div class="stats-grid">
             ${renderStatCard('Total Transactions', s.tx_counts.total, '', '')}
@@ -1109,6 +1119,7 @@ function renderGlobalView(allData) {
     const usdtObtained = treasury?.budgetComp?.totals?.treasury_usdt_available_from_swap || 0;
 
     content.innerHTML = `
+        <div class="docs-link-bar"><a href="https://docs.scrolldaotreasury.com/" target="_blank" rel="noopener noreferrer" class="docs-link">Learn More About this Site →</a></div>
         <div class="stats-grid" style="margin-bottom:24px;">
             <div class="stat-card">
                 <div class="stat-label">Total DAO Treasury</div>
