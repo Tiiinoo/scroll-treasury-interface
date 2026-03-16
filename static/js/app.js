@@ -22,6 +22,7 @@ let state = {
     transactions: { items: [], total: 0, offset: 0, limit: 50 },
     budgets: null,
     filters: { direction: 'fund_movement', category: '', token: '', date_from: '', date_to: '', search: '' },
+    globalData: null,
     burnCurrency: 'USD',
     treasuryMonthlyTab: 'transfers',
     treasurySwapCurrency: 'USDT',
@@ -48,10 +49,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (state.wallets.length > 0) {
         // Check localStorage for saved wallet, otherwise default to first with address
         const savedWallet = localStorage.getItem('scrollTreasury_activeWallet');
-        const validSaved = savedWallet && savedWallet !== 'all' && state.wallets.some(w => w.id === savedWallet);
-        const defaultWallet = validSaved
-            ? savedWallet
-            : 'treasury';
+        const validSaved = savedWallet && (savedWallet === 'overview' || (savedWallet !== 'all' && state.wallets.some(w => w.id === savedWallet)));
+        const defaultWallet = validSaved ? savedWallet : 'treasury';
         selectWallet(defaultWallet);
     }
 });
@@ -111,6 +110,11 @@ async function loadBudgetComparison(walletId) {
 // ── Wallet Selection ────────────────────────────────────────────────────
 
 async function selectWallet(walletId) {
+    if (walletId === 'overview') {
+        await selectOverview();
+        return;
+    }
+
     state.activeWallet = walletId;
     state.transactions.offset = 0;
     state.filters = { direction: 'fund_movement', category: '', token: '', date_from: '', date_to: '', search: '' };
@@ -123,13 +127,16 @@ async function selectWallet(walletId) {
     if (selector) selector.value = walletId;
 
     // Update Header Title
-    let titleName = 'Global "All Multisigs"';
-    if (walletId !== 'all') {
-        const wallet = state.wallets.find(w => w.id === walletId);
-        if (wallet) titleName = wallet.name;
-    }
+    const wallet = state.wallets.find(w => w.id === walletId);
+    const titleName = wallet ? wallet.name : 'Global "All Multisigs"';
     const titleEl = document.getElementById('active-wallet-title');
-    if (titleEl) titleEl.textContent = titleName;
+    if (titleEl) {
+        if (wallet && wallet.address) {
+            titleEl.innerHTML = `<a href="https://scrollscan.com/address/${wallet.address}" target="_blank" rel="noopener noreferrer" class="wallet-title-link">${titleName}</a>`;
+        } else {
+            titleEl.textContent = titleName;
+        }
+    }
 
     // Show loader
     const content = document.getElementById('dashboard-content');
@@ -166,8 +173,7 @@ function renderWalletSelector() {
         return `<option value="${w.id}">${w.name} (${addrShort})</option>`;
     });
 
-    // Add "All Multisigs" option (Removed per user request)
-    // options.unshift(`<option value="all">Global "All Multisigs"</option>`);
+    options.unshift(`<option value="overview">DAO Treasury Overview</option>`);
 
     container.innerHTML = `
         <div class="wallet-selector-wrapper">
@@ -1042,3 +1048,256 @@ window.toggleBudgetCurrency = function (curr) {
         renderDashboard(state.budgetComp);
     }
 };
+
+// ── Global Overview ──────────────────────────────────────────────────────
+
+async function selectOverview() {
+    state.activeWallet = 'overview';
+    localStorage.setItem('scrollTreasury_activeWallet', 'overview');
+
+    const selector = document.getElementById('wallet-selector');
+    if (selector) selector.value = 'overview';
+
+    const titleEl = document.getElementById('active-wallet-title');
+    if (titleEl) titleEl.textContent = 'DAO Treasury Overview';
+
+    const content = document.getElementById('dashboard-content');
+    content.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><p>Loading overview data...</p></div>';
+
+    const results = await Promise.all(
+        state.wallets.map(async w => {
+            const [stats, budgetComp] = await Promise.all([
+                api(`/api/stats/${w.id}`),
+                api(`/api/budget-comparison/${w.id}`)
+            ]);
+            return { wallet: w, stats, budgetComp };
+        })
+    );
+
+    state.globalData = results;
+    renderGlobalView(results);
+}
+
+function renderGlobalView(allData) {
+    const content = document.getElementById('dashboard-content');
+
+    // Total balance across all multisigs
+    const totalBalance = allData.reduce((sum, d) => {
+        return sum + (d.stats.balances || []).reduce((s, b) => s + (b.balance_usd || 0), 0);
+    }, 0);
+
+    // Sub-multisigs only (treasury is the source, not the spender)
+    const subMultisigs = allData.filter(d => d.wallet.id !== 'treasury');
+
+    // Fiat totals
+    const totalFiatBudget    = subMultisigs.reduce((sum, d) => sum + (d.budgetComp?.totals?.budget_usd || 0), 0);
+    const totalFiatSpent     = subMultisigs.reduce((sum, d) => sum + (d.budgetComp?.totals?.spent_usd_native || 0), 0);
+    const totalFiatRemaining = Math.max(0, totalFiatBudget - totalFiatSpent);
+    const fiatPct = totalFiatBudget > 0 ? Math.min(100, Math.round((totalFiatSpent / totalFiatBudget) * 100)) : 0;
+    const fiatFillClass = fiatPct >= 90 ? 'over' : fiatPct >= 70 ? 'warning' : 'under';
+
+    // SCR totals
+    const totalScrBudget    = subMultisigs.reduce((sum, d) => sum + (d.budgetComp?.totals?.budget_scr || 0), 0);
+    const totalScrSpent     = subMultisigs.reduce((sum, d) => sum + (d.budgetComp?.totals?.spent_scr || 0), 0);
+    const totalScrRemaining = Math.max(0, totalScrBudget - totalScrSpent);
+    const scrPct = totalScrBudget > 0 ? Math.min(100, Math.round((totalScrSpent / totalScrBudget) * 100)) : 0;
+    const scrFillClass = scrPct >= 90 ? 'over' : scrPct >= 70 ? 'warning' : 'under';
+
+    // Treasury swap context
+    const treasury    = allData.find(d => d.wallet.id === 'treasury');
+    const scrSwapped  = treasury?.budgetComp?.totals?.treasury_scr_swapped || 0;
+    const usdtObtained = treasury?.budgetComp?.totals?.treasury_usdt_available_from_swap || 0;
+
+    content.innerHTML = `
+        <div class="stats-grid" style="margin-bottom:24px;">
+            <div class="stat-card">
+                <div class="stat-label">Total DAO Treasury</div>
+                <div class="stat-value">$${formatNumber(totalBalance)}</div>
+                <div class="stat-sub">Across all multisigs</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Fiat Budget</div>
+                <div class="stat-value" style="font-size:20px;">$${formatNumber(totalFiatBudget)}</div>
+                <div class="budget-bar" style="margin:8px 0 5px;">
+                    <div class="budget-fill ${fiatFillClass}" style="width:${fiatPct}%"></div>
+                </div>
+                <div class="overview-budget-detail">
+                    <span style="color:var(--text-secondary);">Spent <strong style="color:var(--accent-red);">$${formatNumber(totalFiatSpent)}</strong></span>
+                    <span class="overview-pct ${fiatFillClass}">${fiatPct}%</span>
+                </div>
+                <div class="overview-budget-detail" style="margin-top:4px;">
+                    <span style="color:var(--text-secondary);">Remaining</span>
+                    <strong style="color:var(--accent-green);">$${formatNumber(totalFiatRemaining)}</strong>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">SCR Budget</div>
+                <div class="stat-value" style="font-size:20px;">${formatNumber(totalScrBudget)} SCR</div>
+                <div class="budget-bar" style="margin:8px 0 5px;">
+                    <div class="budget-fill ${scrFillClass}" style="width:${scrPct}%"></div>
+                </div>
+                <div class="overview-budget-detail">
+                    <span style="color:var(--text-secondary);">Spent <strong style="color:var(--accent-red);">${formatNumber(totalScrSpent)} SCR</strong></span>
+                    <span class="overview-pct ${scrFillClass}">${scrPct}%</span>
+                </div>
+                <div class="overview-budget-detail" style="margin-top:4px;">
+                    <span style="color:var(--text-secondary);">Remaining</span>
+                    <strong style="color:var(--accent-green);">${formatNumber(totalScrRemaining)} SCR</strong>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Treasury SCR → USDT Swaps</div>
+                <div class="stat-value" style="font-size:18px;">${formatNumber(scrSwapped)} SCR</div>
+                <div class="stat-sub">→ $${formatNumber(usdtObtained)} USDT obtained</div>
+            </div>
+        </div>
+        <div class="overview-grid">
+            ${allData.map(d => renderMultisigCard(d)).join('')}
+        </div>
+    `;
+}
+
+function renderMultisigCard(data) {
+    const { wallet, stats, budgetComp } = data;
+    const balances = stats.balances || [];
+    const totalUsd = balances.reduce((s, b) => s + (b.balance_usd || 0), 0);
+    const addrShort = wallet.address ? `${wallet.address.slice(0, 6)}...${wallet.address.slice(-4)}` : 'Not deployed';
+
+    const tokenSummary = balances
+        .sort((a, b) => (b.balance_usd || 0) - (a.balance_usd || 0))
+        .slice(0, 3)
+        .map(b => `${formatTokenAmount(b.balance_decimal, b.token_symbol)} ${b.token_symbol}`)
+        .join(' · ');
+
+    let activitySection = '';
+
+    if (wallet.id === 'treasury') {
+        const fiatBudget      = budgetComp?.totals?.budget_usd || 0;
+        const fiatTransferred = budgetComp?.totals?.treasury_transferred_usd || 0;
+        const fiatRemaining   = Math.max(0, fiatBudget - fiatTransferred);
+        const scrBudget       = budgetComp?.totals?.budget_scr || 0;
+        const scrSwapped      = budgetComp?.totals?.treasury_scr_swapped || 0;
+        const usdtObtained    = budgetComp?.totals?.treasury_usdt_available_from_swap || 0;
+        const usdtTransferred = budgetComp?.totals?.treasury_spent_scr_initiatives_usd || 0;
+        const scrRemaining    = Math.max(0, scrBudget - scrSwapped);
+
+        activitySection = `
+            <div class="multisig-card-section">
+                <div class="multisig-card-section-title">Fiat Budget (USDT)</div>
+                <div class="overview-metric">
+                    <span class="overview-metric-label">Budget</span>
+                    <span class="overview-metric-value">$${formatNumber(fiatBudget)}</span>
+                </div>
+                <div class="overview-metric">
+                    <span class="overview-metric-label">Transferred to Multisigs</span>
+                    <span class="overview-metric-value negative">$${formatNumber(fiatTransferred)}</span>
+                </div>
+                <div class="overview-metric">
+                    <span class="overview-metric-label">Remaining</span>
+                    <span class="overview-metric-value positive">$${formatNumber(fiatRemaining)}</span>
+                </div>
+            </div>
+            <div class="multisig-card-section">
+                <div class="multisig-card-section-title">SCR Budget</div>
+                <div class="overview-metric">
+                    <span class="overview-metric-label">Budget</span>
+                    <span class="overview-metric-value">${formatNumber(scrBudget)} SCR</span>
+                </div>
+                <div class="overview-metric">
+                    <span class="overview-metric-label">Swapped to USDT</span>
+                    <span class="overview-metric-value negative">${formatNumber(scrSwapped)} SCR</span>
+                </div>
+                <div class="overview-metric" style="padding-left:10px;">
+                    <span class="overview-metric-label" style="font-size:11px;">↳ USDT Obtained</span>
+                    <span class="overview-metric-value positive" style="font-size:12px;">$${formatNumber(usdtObtained)}</span>
+                </div>
+                <div class="overview-metric" style="padding-left:10px;">
+                    <span class="overview-metric-label" style="font-size:11px;">↳ Transferred to Multisigs</span>
+                    <span class="overview-metric-value negative" style="font-size:12px;">$${formatNumber(usdtTransferred)}</span>
+                </div>
+                <div class="overview-metric">
+                    <span class="overview-metric-label">SCR Remaining</span>
+                    <span class="overview-metric-value positive">${formatNumber(scrRemaining)} SCR</span>
+                </div>
+            </div>`;
+    } else {
+        const fiatBudget    = budgetComp?.totals?.budget_usd || 0;
+        const fiatSpent     = budgetComp?.totals?.spent_usd_native || 0;
+        const fiatRemaining = Math.max(0, fiatBudget - fiatSpent);
+        const fiatPct = fiatBudget > 0 ? Math.min(100, Math.round((fiatSpent / fiatBudget) * 100)) : 0;
+        const fiatFillClass = fiatPct >= 90 ? 'over' : fiatPct >= 70 ? 'warning' : 'under';
+
+        const scrBudget    = budgetComp?.totals?.budget_scr || 0;
+        const scrSpent     = budgetComp?.totals?.spent_scr || 0;
+        const scrRemaining = Math.max(0, scrBudget - scrSpent);
+        const scrSpentUsd  = budgetComp?.totals?.spent_scr_usd_native || 0;
+        const scrPct = scrBudget > 0 ? Math.min(100, Math.round((scrSpent / scrBudget) * 100)) : 0;
+        const scrFillClass = scrPct >= 90 ? 'over' : scrPct >= 70 ? 'warning' : 'under';
+
+        if (fiatBudget > 0) {
+            activitySection += `
+                <div class="multisig-card-section">
+                    <div class="multisig-card-section-title">Fiat Budget (USDT)</div>
+                    <div class="overview-metric">
+                        <span class="overview-metric-label">Budget</span>
+                        <span class="overview-metric-value">$${formatNumber(fiatBudget)}</span>
+                    </div>
+                    <div class="budget-bar" style="margin:8px 0 5px;">
+                        <div class="budget-fill ${fiatFillClass}" style="width:${fiatPct}%"></div>
+                    </div>
+                    <div class="overview-budget-detail">
+                        <span style="color:var(--text-secondary);">Spent <strong style="color:var(--accent-red);">$${formatNumber(fiatSpent)}</strong></span>
+                        <span class="overview-pct ${fiatFillClass}">${fiatPct}%</span>
+                    </div>
+                    <div class="overview-budget-detail" style="margin-top:4px;">
+                        <span style="color:var(--text-secondary);">Remaining</span>
+                        <strong style="color:var(--accent-green);">$${formatNumber(fiatRemaining)}</strong>
+                    </div>
+                </div>`;
+        }
+
+        if (scrBudget > 0) {
+            activitySection += `
+                <div class="multisig-card-section">
+                    <div class="multisig-card-section-title">SCR Budget</div>
+                    <div class="overview-metric">
+                        <span class="overview-metric-label">Budget</span>
+                        <span class="overview-metric-value">${formatNumber(scrBudget)} SCR</span>
+                    </div>
+                    <div class="budget-bar" style="margin:8px 0 5px;">
+                        <div class="budget-fill ${scrFillClass}" style="width:${scrPct}%"></div>
+                    </div>
+                    <div class="overview-budget-detail">
+                        <span style="color:var(--text-secondary);">Spent <strong style="color:var(--accent-red);">${formatNumber(scrSpent)} SCR</strong>${scrSpentUsd > 0 ? ` <span style="font-size:11px;color:var(--text-muted)">(~$${formatNumber(scrSpentUsd)})</span>` : ''}</span>
+                        <span class="overview-pct ${scrFillClass}">${scrPct}%</span>
+                    </div>
+                    <div class="overview-budget-detail" style="margin-top:4px;">
+                        <span style="color:var(--text-secondary);">Remaining</span>
+                        <strong style="color:var(--accent-green);">${formatNumber(scrRemaining)} SCR</strong>
+                    </div>
+                </div>`;
+        }
+
+        if (!fiatBudget && !scrBudget) {
+            activitySection = `
+                <div class="multisig-card-section">
+                    <span style="color:var(--text-muted); font-size:12px;">No budget configured</span>
+                </div>`;
+        }
+    }
+
+    return `
+        <div class="multisig-card" onclick="selectWallet('${wallet.id}')">
+            <div class="multisig-card-header">
+                <div class="multisig-card-name">${wallet.name}</div>
+                <div class="multisig-card-addr">${addrShort}</div>
+            </div>
+            <div class="multisig-card-section">
+                <div class="multisig-card-section-title">Current Balance</div>
+                <div class="multisig-card-balance">$${formatNumber(totalUsd)}</div>
+                ${tokenSummary ? `<div class="multisig-card-tokens">${tokenSummary}</div>` : ''}
+            </div>
+            ${activitySection}
+            <div class="multisig-card-footer">View details →</div>
+        </div>`;
+}

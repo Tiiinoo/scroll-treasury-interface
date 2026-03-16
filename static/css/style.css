@@ -1117,6 +1117,144 @@ body {
     background: var(--border-light);
 }
 
+/* ── Wallet Title Link ───────────────────────────────────────────────────── */
+
+.wallet-title-link {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px dashed var(--text-muted);
+    transition: color 0.2s, border-color 0.2s;
+}
+
+.wallet-title-link:hover {
+    color: var(--accent-scroll);
+    border-bottom-color: var(--accent-scroll);
+}
+
+/* ── Global Overview ─────────────────────────────────────────────────────── */
+
+.overview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+}
+
+.multisig-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.2s, transform 0.15s;
+    display: flex;
+    flex-direction: column;
+}
+
+.multisig-card:hover {
+    border-color: var(--accent-scroll);
+    transform: translateY(-2px);
+}
+
+.multisig-card-header {
+    padding: 16px 20px 14px;
+    border-bottom: 1px solid var(--border-color);
+    background: linear-gradient(135deg, #1a1c28 0%, #1e2234 100%);
+}
+
+.multisig-card-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent-scroll);
+    margin-bottom: 4px;
+}
+
+.multisig-card-addr {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.multisig-card-section {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.multisig-card-section:last-of-type {
+    border-bottom: none;
+}
+
+.multisig-card-section-title {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+}
+
+.multisig-card-balance {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.multisig-card-tokens {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.overview-metric {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    margin-bottom: 4px;
+}
+
+.overview-metric-label {
+    color: var(--text-secondary);
+}
+
+.overview-metric-value {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.overview-metric-value.positive { color: var(--accent-green); }
+.overview-metric-value.negative { color: var(--accent-red); }
+
+.overview-budget-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+}
+
+.overview-budget-detail {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+}
+
+.overview-pct {
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.overview-pct.under { color: var(--accent-green); }
+.overview-pct.warning { color: var(--accent-orange); }
+.overview-pct.over { color: var(--accent-red); }
+
+.multisig-card-footer {
+    padding: 10px 20px;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: right;
+    margin-top: auto;
+    border-top: 1px solid var(--border-color);
+}
+
 /* ── Budget Summary Card ──────────────────────────────────────────────── */
 
 .budget-summary {
