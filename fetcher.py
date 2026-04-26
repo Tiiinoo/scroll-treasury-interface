@@ -487,12 +487,9 @@ def fetch_safe_multisig_txs(wallet_id: str, address: str):
 
     # We only care about executed transactions
     safe_url = f"{SAFE_API_BASE}/safes/{address}/multisig-transactions/?executed=true&limit=100&ordering=-executionDate"
-    encoded_url = urllib.parse.quote(safe_url)
-    proxy_url = f"https://api.allorigins.win/raw?url={encoded_url}"
 
     try:
-        headers = {"User-Agent": "Mozilla/5.0"}
-        resp = session.get(proxy_url, headers=headers, timeout=30)
+        resp = session.get(safe_url, timeout=30)
         if resp.status_code != 200:
             logger.warning("Safe API error %s: %s", resp.status_code, resp.text)
             return
