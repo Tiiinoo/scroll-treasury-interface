@@ -13,7 +13,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from models import get_db
-from config import SCROLLSCAN_API_BASE, SCROLLSCAN_API_KEY, SCROLL_CHAIN_ID, MULTISIGS, TOKEN_COINGECKO_IDS
+from config import SCROLLSCAN_API_BASE, SCROLLSCAN_API_KEY, MULTISIGS, TOKEN_COINGECKO_IDS
 
 # Safe Transaction Service API for Scroll
 SAFE_API_BASE = "https://safe-transaction-scroll.safe.global/api/v1"
@@ -43,11 +43,6 @@ def _api_get(params: dict) -> list:
     """Make a GET request to Scrollscan API and return the result list."""
     if SCROLLSCAN_API_KEY:
         params["apikey"] = SCROLLSCAN_API_KEY
-    
-    # Add chainid for V2 API
-    params["chainid"] = SCROLL_CHAIN_ID
-    
-    
     try:
         resp = session.get(SCROLLSCAN_API_BASE, params=params, timeout=30)
         resp.raise_for_status()

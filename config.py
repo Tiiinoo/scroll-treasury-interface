@@ -17,9 +17,8 @@ SECRET_KEY = os.environ.get("SECRET_KEY")
 DATABASE_PATH = os.environ.get("DATABASE_PATH", "treasury.db")
 SCROLLSCAN_API_KEY = os.environ.get("SCROLLSCAN_API_KEY", "")  # Optional
 
-# Scrollscan API base (Etherscan V2)
-SCROLLSCAN_API_BASE = "https://api.etherscan.io/v2/api"
-SCROLL_CHAIN_ID = 534352
+# Scrollscan API base (BlockScout-powered, Etherscan-compatible)
+SCROLLSCAN_API_BASE = "https://scrollscan.com/api"
 
 # Fetch interval in minutes
 FETCH_INTERVAL_MINUTES = int(os.environ.get("FETCH_INTERVAL_MINUTES", "15"))
