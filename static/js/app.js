@@ -606,7 +606,13 @@ function renderBudgetComparison(budgetComp) {
         if (state.activeWallet === 'treasury') {
             const swappedPct = totals.budget_scr > 0 ? ((totals.treasury_scr_swapped || 0) / totals.budget_scr * 100) : 0;
             const subSpentEcoPct = totals.treasury_transferred_scr_initiatives > 0 ? ((totals.treasury_spent_scr_initiatives_usd || 0) / totals.treasury_transferred_scr_initiatives * 100) : 0;
-            const remainingUsdt = (totals.treasury_usdt_available_from_swap || 0) - (totals.treasury_transferred_scr_initiatives || 0);
+            const committeeException = totals.treasury_usdt_committee_exception || 0;
+            const displayedTransferred = (totals.treasury_transferred_scr_initiatives || 0) + committeeException;
+            const displayedSpent = (totals.treasury_spent_scr_initiatives_usd || 0) + committeeException;
+            const remainingUsdt = (totals.treasury_usdt_available_from_swap || 0) - displayedTransferred;
+
+            const transferredTooltip = 'Transferred to the Community Allocations, Ecosystem Allocations, and Operations & Accountability (Discretionary Budget) Multisigs. Also includes two one-time exceptions deducted from Remaining USDT: $23,020 paid in committee salaries from swap USDT instead of Foundation stablecoins (Apr 9 2026), and $10,020 paid for the governance frontend (Apr 14 2026).';
+            const spentTooltip = 'Spent by the Community Allocations, Ecosystem Allocations, and Operations & Accountability (Discretionary Budget) Multisigs. Note: two one-time exceptions ($23,020 committee salaries and $10,020 governance frontend) were paid directly from treasury swap USDT and are deducted from Remaining USDT separately.';
 
             rightSideHtmlScr = `
                 <div style="text-align:right">
@@ -616,14 +622,14 @@ function renderBudgetComparison(budgetComp) {
                     <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total USDT Obtained</div>
                     <div style="font-size:16px; font-weight:700; color:var(--text-main); margin-bottom:8px">$${formatNumber(totals.treasury_usdt_available_from_swap || 0)}</div>
 
-                    <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total USDT Transferred to other DAO Multisigs <span class="tooltip-icon" title="Transferred to the Community Allocations, Ecosystem Allocations, and Operations & Accountability (Discretionary Budget) Multisigs">ⓘ</span></div>
-                    <div style="font-size:16px; font-weight:700; color:var(--text-main); margin-bottom:8px">$${formatNumber(totals.treasury_transferred_scr_initiatives || 0)}</div>
+                    <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total USDT Transferred to other DAO Multisigs <span class="tooltip-icon" title="${transferredTooltip}">ⓘ</span></div>
+                    <div style="font-size:16px; font-weight:700; color:var(--text-main); margin-bottom:8px">$${formatNumber(displayedTransferred)}</div>
 
                     <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Remaining USDT</div>
                     <div style="font-size:16px; font-weight:700; color:var(--text-main); margin-bottom:8px">$${formatNumber(remainingUsdt)}</div>
 
-                    <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total USDT Spent <span class="tooltip-icon" title="Spent by the Community Allocations, Ecosystem Allocations, and Operations & Accountability (Discretionary Budget) Multisigs">ⓘ</span></div>
-                    <div style="font-size:16px; font-weight:700; color:${subSpentEcoPct > 90 ? 'var(--accent-red)' : 'var(--accent-green)'}">$${formatNumber(totals.treasury_spent_scr_initiatives_usd || 0)}</div>
+                    <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px">Total USDT Spent <span class="tooltip-icon" title="${spentTooltip}">ⓘ</span></div>
+                    <div style="font-size:16px; font-weight:700; color:${subSpentEcoPct > 90 ? 'var(--accent-red)' : 'var(--accent-green)'}">$${formatNumber(displayedSpent)}</div>
                 </div>
             `;
         } else {

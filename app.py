@@ -974,6 +974,7 @@ def api_budget_comparison(wallet_id):
     treasury_usdt_available_from_swap = 0
     treasury_transferred_scr_initiatives = 0
     treasury_spent_scr_initiatives_usd = 0
+    treasury_usdt_committee_exception = 0
 
     if wallet_id == 'treasury':
         # Calculate transferred to Operations & Delegates (USD part)
@@ -1051,10 +1052,13 @@ def api_budget_comparison(wallet_id):
             '0x756ed67a0e73dd1ec4facbc307ca79c28d930b20', # community
             '0xe47b51a31ad43acb72a224fab4a17999311e2e48'  # ecosystem
         ]
-        eco_categories_tuple = "('Internal Transfer', 'Community Allocation', 'Ecosystem Allocation')"
-        transferred_eco_query = f"""SELECT token_symbol, value_decimal, date(timestamp, 'unixepoch') as tx_date 
-                             FROM transactions 
-                             WHERE wallet_id='treasury' AND direction='out' AND category IN {eco_categories_tuple}
+        # Address-based: any USDT going to eco/community addresses counts,
+        # regardless of category — except the Foundation USDT pass-through
+        # which is intentionally excluded by its fixed category.
+        transferred_eco_query = f"""SELECT token_symbol, value_decimal, date(timestamp, 'unixepoch') as tx_date
+                             FROM transactions
+                             WHERE wallet_id='treasury' AND direction='out'
+                             AND category != 'Funds from the Previous DAO Treasury'
                              AND LOWER(to_address) IN ({','.join(['?']*len(ecosystem_addresses))})"""
         transferred_eco_rows = conn.execute(transferred_eco_query, [a.lower() for a in ecosystem_addresses]).fetchall()
         for r in transferred_eco_rows:
@@ -1081,6 +1085,23 @@ def api_budget_comparison(wallet_id):
             else:
                 hist_price = price_map.get((symbol, tx_date), prices.get(symbol, 0))
                 treasury_transferred_scr_initiatives += (val * hist_price)
+
+        # 3b. One-time exceptions: direct USDT spend from treasury that bypasses
+        # the normal multisig distribution channels but still reduces swap USDT.
+        # Each is identified by tx hash to avoid accidental inclusion by other rules.
+        _EXCEPTION_TXS = [
+            '0x3f6ac9a8306a7bdaec1c46a03597d561b7c5391679eb97c7544e49b6b268536b',  # $23,020 committee salaries (Apr 9 2026)
+            '0x1097bd4907cdf972b82f9650a80487bf4b273a90ed96b172e454f5f0965b6601',  # $10,020 governance frontend (Apr 14 2026)
+        ]
+        placeholders = ','.join(['?'] * len(_EXCEPTION_TXS))
+        exc_row = conn.execute(
+            f"""SELECT COALESCE(SUM(value_decimal), 0) as val
+               FROM transactions
+               WHERE tx_hash IN ({placeholders}) AND wallet_id='treasury' AND direction='out'
+               AND token_symbol IN ('USDT','USDC')""",
+            _EXCEPTION_TXS
+        ).fetchone()
+        treasury_usdt_committee_exception = exc_row["val"] if exc_row else 0
 
         # 4. USDT Spent by Community & Ecosystem
         qs_list = list(NON_EXPENSE_CATEGORIES) + ["Funds from the Previous DAO Treasury"]
@@ -1122,6 +1143,7 @@ def api_budget_comparison(wallet_id):
             "treasury_usdt_available_from_swap": treasury_usdt_available_from_swap,
             "treasury_transferred_scr_initiatives": treasury_transferred_scr_initiatives,
             "treasury_spent_scr_initiatives_usd": treasury_spent_scr_initiatives_usd,
+            "treasury_usdt_committee_exception": treasury_usdt_committee_exception,
         },
         "groups": groups_list, 
     })
