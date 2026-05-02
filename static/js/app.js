@@ -30,6 +30,7 @@ let state = {
     prices: { ETH: 0, SCR: 0 },
     budgetComp: null,
     signerAliases: {},
+    balanceChainView: 'total',
 };
 
 const CATEGORY_COLOURS = [
@@ -125,6 +126,7 @@ async function selectWallet(walletId) {
 
     state.activeWallet = walletId;
     state.transactions.offset = 0;
+    state.balanceChainView = 'total';
     state.filters = { direction: 'fund_movement', category: '', token: '', date_from: '', date_to: '', search: '' };
 
     // Save to localStorage
@@ -222,11 +224,12 @@ function renderDashboard(budgetComp) {
 
         <!-- Balances -->
         <div class="section">
-            <div class="section-header">
+            <div class="section-header" style="display:flex; justify-content:space-between; align-items:center;">
                 <h2 class="section-title">Balances</h2>
+                ${renderBalanceChainTabs(s)}
             </div>
             <div class="balance-grid" id="balance-grid">
-                ${renderBalances(s.balances)}
+                ${renderBalances(getActiveBalances(s))}
             </div>
         </div>
 
@@ -314,7 +317,35 @@ function renderStatCard(label, value, cls, sub) {
 
 // ── Balances ────────────────────────────────────────────────────────────
 
-// ── Balances ────────────────────────────────────────────────────────────
+function getActiveBalances(s) {
+    const byChain = s.balances_by_chain || {};
+    if (state.balanceChainView === 'scroll') return byChain.scroll || [];
+    if (state.balanceChainView === 'ethereum') return byChain.ethereum || [];
+    return s.balances || [];
+}
+
+function renderBalanceChainTabs(s) {
+    const hasEthereum = (s.balances_by_chain?.ethereum?.length || 0) > 0;
+    if (!hasEthereum) return '';
+    const tabs = [
+        { id: 'total', label: 'Total' },
+        { id: 'scroll', label: 'Scroll' },
+        { id: 'ethereum', label: 'Mainnet' },
+    ];
+    return `<div class="balance-chain-tabs">${tabs.map(t =>
+        `<button class="balance-chain-tab ${state.balanceChainView === t.id ? 'active' : ''}" data-view="${t.id}" onclick="setBalanceChainView('${t.id}')">${t.label}</button>`
+    ).join('')}</div>`;
+}
+
+function setBalanceChainView(view) {
+    state.balanceChainView = view;
+    const s = state.stats;
+    if (!s) return;
+    document.querySelectorAll('.balance-chain-tab').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.view === view);
+    });
+    document.getElementById('balance-grid').innerHTML = renderBalances(getActiveBalances(s));
+}
 
 function renderBalances(balances) {
     if (!balances || balances.length === 0) {
@@ -891,7 +922,7 @@ function renderTransactionsTable() {
         return `<tr>
             ${isAll ? `<td><span class="tx-badge" style="background:var(--bg-lighter); color:var(--text-main); font-size:11px; max-width: 120px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; display: inline-block;" title="${escapeHtml(sourceWalletName)}">${escapeHtml(sourceWalletName)}</span></td>` : ''}
             <td>${escapeHtml(tx.date)}</td>
-            <td><a class="tx-hash" href="https://scrollscan.com/tx/${escapeHtml(tx.tx_hash)}" target="_blank" rel="noopener">${escapeHtml(tx.tx_hash.slice(0, 10))}...</a></td>
+            <td><a class="tx-hash" href="${tx.chain === 'ethereum' ? 'https://etherscan.io' : 'https://scrollscan.com'}/tx/${escapeHtml(tx.tx_hash)}" target="_blank" rel="noopener">${escapeHtml(tx.tx_hash.slice(0, 10))}...<span class="chain-badge ${tx.chain === 'ethereum' ? 'chain-eth' : 'chain-scroll'}">${tx.chain === 'ethereum' ? 'ETH' : 'SCR'}</span></a></td>
             <td><span class="tx-addr">${shortenAddr(tx.from_address)}</span></td>
             <td><span class="tx-addr">${shortenAddr(tx.to_address)}</span></td>
             <td>${amountHtml}</td>

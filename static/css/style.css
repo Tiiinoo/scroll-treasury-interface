@@ -1350,3 +1350,59 @@ body {
 .toast.error {
     border-color: var(--accent-red);
 }
+
+.chain-badge {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 4px;
+    border-radius: 3px;
+    margin-left: 5px;
+    vertical-align: middle;
+    letter-spacing: 0.03em;
+}
+
+.chain-scroll {
+    background: rgba(238, 99, 53, 0.15);
+    color: #ee6335;
+    border: 1px solid rgba(238, 99, 53, 0.3);
+}
+
+.chain-eth {
+    background: rgba(98, 126, 234, 0.15);
+    color: #627eea;
+    border: 1px solid rgba(98, 126, 234, 0.3);
+}
+
+/* Balance chain view tabs */
+.balance-chain-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--bg-lighter);
+    padding: 3px;
+    border-radius: 8px;
+}
+
+.balance-chain-tab {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 4px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    font-family: inherit;
+}
+
+.balance-chain-tab:hover {
+    color: var(--text-main);
+    background: var(--bg-card);
+}
+
+.balance-chain-tab.active {
+    background: var(--bg-card);
+    color: var(--text-main);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}

@@ -15,10 +15,20 @@ load_dotenv()
 # ---------------------------------------------------------------------------
 SECRET_KEY = os.environ.get("SECRET_KEY")
 DATABASE_PATH = os.environ.get("DATABASE_PATH", "treasury.db")
-SCROLLSCAN_API_KEY = os.environ.get("SCROLLSCAN_API_KEY", "")  # Optional
+SCROLLSCAN_API_KEY = os.environ.get("SCROLLSCAN_API_KEY") or os.environ.get("BLOCKSCOUT_API_KEY", "")  # Optional
 
 # Scrollscan API base (BlockScout-powered, Etherscan-compatible)
 SCROLLSCAN_API_BASE = "https://scrollscan.com/api"
+
+# Etherscan API for Ethereum mainnet
+ETHERSCAN_API_KEY = os.environ.get("ETHERSCAN_API_KEY", "")
+ETHERSCAN_API_BASE = "https://api.etherscan.io/v2/api"  # V2 endpoint
+
+# Multisigs also deployed on Ethereum mainnet (wallet_id → address)
+MAINNET_MULTISIGS = {
+    "treasury": "0x20fa362323447506D9d0C02483ae97C4e2d6B607",
+    "committee": "0xd0D05390D922a2C45A70EAA4601600F236C02AcC",
+}
 
 # Fetch interval in minutes
 FETCH_INTERVAL_MINUTES = int(os.environ.get("FETCH_INTERVAL_MINUTES", "15"))

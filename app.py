@@ -30,7 +30,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 from config import (
     SECRET_KEY, AUTH_USERNAME, AUTH_PASSWORD,
-    MULTISIGS, CATEGORIES, BUDGETS, BUDGET_TOTALS,
+    MULTISIGS, MAINNET_MULTISIGS, CATEGORIES, BUDGETS, BUDGET_TOTALS,
     FETCH_INTERVAL_MINUTES, TOKEN_COINGECKO_IDS,
     BUDGET_OVERRIDES, SIGNER_ALIASES, NON_EXPENSE_CATEGORIES
 )
@@ -322,6 +322,7 @@ def api_transactions(wallet_id):
 
     txs = []
     for r in rows:
+        chain = r["chain"] if "chain" in r.keys() else "scroll"
         txs.append({
             "id": r["id"],
             "tx_hash": r["tx_hash"],
@@ -341,6 +342,7 @@ def api_transactions(wallet_id):
             "signers": r["signers"],
             "is_error": r["is_error"],
             "wallet_id": r["wallet_id"],
+            "chain": chain,
         })
 
 
@@ -426,27 +428,52 @@ def api_stats(wallet_id):
     for row in conn.execute("SELECT symbol, date, price FROM token_prices").fetchall():
         price_map[(row["symbol"], row["date"])] = row["price"]
 
-    # Balances
-    balances = []
+    # Balances helper — fetches and prices balance rows
+    def _build_balances(query: str, params: tuple) -> list:
+        result = []
+        for row in conn.execute(query, params).fetchall():
+            symbol = row["token_symbol"]
+            price = prices.get(symbol, 0)
+            balance = row["balance_decimal"]
+            keys = row.keys()
+            result.append({
+                "token_symbol": symbol,
+                "token_name": row["token_name"],
+                "balance_decimal": balance,
+                "balance_usd": balance * price,
+                "price_usd": price,
+                "last_updated": row["last_updated"],
+                "contract_address": row["contract_address"] if "contract_address" in keys else "",
+            })
+        return result
+
+    # Total balances — aggregate by token_symbol across all chains
     if wallet_id == 'all':
-        balances_query = "SELECT token_symbol, token_name, contract_address, SUM(balance_decimal) as balance_decimal, MAX(last_updated) as last_updated FROM balances GROUP BY token_symbol, token_name, contract_address"
-        balances_params = ()
+        balances = _build_balances(
+            "SELECT token_symbol, token_name, '' as contract_address, SUM(balance_decimal) as balance_decimal, MAX(last_updated) as last_updated FROM balances GROUP BY token_symbol, token_name HAVING SUM(balance_decimal) > 0",
+            ()
+        )
+        balances_scroll = _build_balances(
+            "SELECT token_symbol, token_name, contract_address, SUM(balance_decimal) as balance_decimal, MAX(last_updated) as last_updated FROM balances WHERE chain='scroll' GROUP BY token_symbol, token_name, contract_address HAVING SUM(balance_decimal) > 0",
+            ()
+        )
+        balances_ethereum = _build_balances(
+            "SELECT token_symbol, token_name, contract_address, SUM(balance_decimal) as balance_decimal, MAX(last_updated) as last_updated FROM balances WHERE chain='ethereum' GROUP BY token_symbol, token_name, contract_address HAVING SUM(balance_decimal) > 0",
+            ()
+        )
     else:
-        balances_query = "SELECT * FROM balances WHERE wallet_id=?"
-        balances_params = (wallet_id,)
-    for row in conn.execute(balances_query, balances_params).fetchall():
-        symbol = row["token_symbol"]
-        price = prices.get(symbol, 0)
-        balance = row["balance_decimal"]
-        balances.append({
-            "token_symbol": symbol,
-            "token_name": row["token_name"],
-            "balance_decimal": balance,
-            "balance_usd": balance * price,
-            "price_usd": price,
-            "last_updated": row["last_updated"],
-            "contract_address": row["contract_address"],
-        })
+        balances = _build_balances(
+            "SELECT token_symbol, token_name, '' as contract_address, SUM(balance_decimal) as balance_decimal, MAX(last_updated) as last_updated FROM balances WHERE wallet_id=? GROUP BY token_symbol, token_name HAVING SUM(balance_decimal) > 0",
+            (wallet_id,)
+        )
+        balances_scroll = _build_balances(
+            "SELECT token_symbol, token_name, contract_address, SUM(balance_decimal) as balance_decimal, MAX(last_updated) as last_updated FROM balances WHERE wallet_id=? AND chain='scroll' GROUP BY token_symbol, token_name, contract_address HAVING SUM(balance_decimal) > 0",
+            (wallet_id,)
+        )
+        balances_ethereum = _build_balances(
+            "SELECT token_symbol, token_name, contract_address, SUM(balance_decimal) as balance_decimal, MAX(last_updated) as last_updated FROM balances WHERE wallet_id=? AND chain='ethereum' GROUP BY token_symbol, token_name, contract_address HAVING SUM(balance_decimal) > 0",
+            (wallet_id,)
+        )
 
     # Spending by category (outgoing only, excluding non-expenses) - using historical prices
     spending = []
@@ -769,6 +796,10 @@ def api_stats(wallet_id):
 
     return jsonify({
         "balances": balances,
+        "balances_by_chain": {
+            "scroll": balances_scroll,
+            "ethereum": balances_ethereum,
+        },
         "spending_by_category": spending,
         "monthly_burn": monthly_burn,
         "treasury_monthly_transfers": treasury_monthly_transfers,

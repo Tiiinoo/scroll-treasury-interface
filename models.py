@@ -79,6 +79,7 @@ def init_db():
     CREATE TABLE IF NOT EXISTS balances (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
         wallet_id   TEXT NOT NULL,
+        chain       TEXT NOT NULL DEFAULT 'scroll',
         token_symbol TEXT NOT NULL DEFAULT 'ETH',
         token_name  TEXT NOT NULL DEFAULT 'Ether',
         contract_address TEXT NOT NULL DEFAULT '',
@@ -86,13 +87,14 @@ def init_db():
         balance_decimal REAL NOT NULL DEFAULT 0,
         last_updated INTEGER NOT NULL,
         FOREIGN KEY (wallet_id) REFERENCES wallets(id),
-        UNIQUE(wallet_id, contract_address)
+        UNIQUE(wallet_id, contract_address, chain)
     );
 
     -- Fetch tracking
     CREATE TABLE IF NOT EXISTS fetch_log (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
         wallet_id   TEXT NOT NULL,
+        chain       TEXT NOT NULL DEFAULT 'scroll',
         fetch_type  TEXT NOT NULL,   -- normal | erc20 | internal
         last_block  INTEGER NOT NULL DEFAULT 0,
         fetched_at  INTEGER NOT NULL,
@@ -123,6 +125,38 @@ def init_db():
         cur.execute("ALTER TABLE transactions ADD COLUMN signers TEXT NOT NULL DEFAULT ''")
     except sqlite3.OperationalError:
         pass  # Column already exists
+
+    # Migration: Add chain column to transactions and fetch_log
+    for table in ('transactions', 'fetch_log'):
+        try:
+            cur.execute(f"ALTER TABLE {table} ADD COLUMN chain TEXT NOT NULL DEFAULT 'scroll'")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+    # Migration: Recreate balances table if it lacks the chain column
+    # (safe — balances is a computed cache that repopulates on next fetch)
+    has_chain = any(
+        row[1] == 'chain'
+        for row in cur.execute("PRAGMA table_info(balances)").fetchall()
+    )
+    if not has_chain:
+        cur.executescript("""
+            DROP TABLE IF EXISTS balances;
+            CREATE TABLE balances (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                wallet_id        TEXT NOT NULL,
+                chain            TEXT NOT NULL DEFAULT 'scroll',
+                token_symbol     TEXT NOT NULL DEFAULT 'ETH',
+                token_name       TEXT NOT NULL DEFAULT 'Ether',
+                contract_address TEXT NOT NULL DEFAULT '',
+                balance          TEXT NOT NULL DEFAULT '0',
+                balance_decimal  REAL NOT NULL DEFAULT 0,
+                last_updated     INTEGER NOT NULL,
+                FOREIGN KEY (wallet_id) REFERENCES wallets(id),
+                UNIQUE(wallet_id, contract_address, chain)
+            );
+            CREATE INDEX IF NOT EXISTS idx_balances_wallet ON balances(wallet_id);
+        """)
 
     conn.commit()
     conn.close()
