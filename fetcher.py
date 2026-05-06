@@ -31,7 +31,7 @@ def create_session():
     retries = Retry(
         total=3,
         backoff_factor=1,
-        status_forcelist=[429, 500, 502, 503, 504],
+        status_forcelist=[500, 502, 503, 504],  # 429 handled manually — no auto-retry
         allowed_methods=["GET"]
     )
     s.mount('https://', HTTPAdapter(max_retries=retries))
@@ -391,7 +391,8 @@ def fetch_safe_multisig_txs(wallet_id: str, address: str, safe_api_base: str = N
         resp = session.get(safe_url, timeout=30)
         if resp.status_code == 429:
             retry_after = resp.headers.get("Retry-After") or resp.headers.get("x-ratelimit-reset", "unknown")
-            logger.warning("%s/%s/safe: rate limited (429), retry-after: %s", wallet_id, chain, retry_after)
+            logger.warning("%s/%s/safe: rate limited (429), retry-after: %s — falling back to calldata", wallet_id, chain, retry_after)
+            _get_signers_from_calldata(wallet_id, address, chain, conn)
             return
         if resp.status_code != 200:
             logger.warning("%s/%s/safe: API returned %s — %s", wallet_id, chain, resp.status_code, resp.text[:200])
@@ -425,6 +426,190 @@ def fetch_safe_multisig_txs(wallet_id: str, address: str, safe_api_base: str = N
         logger.error("[fetcher] Safe API error for %s/%s: %s", wallet_id, chain, e)
     finally:
         conn.close()
+
+
+# ── Calldata-based signer recovery ───────────────────────────────────────
+
+def _get_signers_from_calldata(wallet_id: str, address: str, chain: str, conn) -> int:
+    """
+    Recover multisig signers by decoding execTransaction calldata on-chain.
+
+    Bypasses the Safe Transaction Service API entirely. For each outgoing
+    transaction that is missing signers, fetches the raw tx input via the
+    Etherscan/Scrollscan proxy API, decodes the execTransaction ABI calldata,
+    computes the EIP-712 SafeTxHash, and recovers signer addresses via ecrecover.
+
+    Returns the number of DB rows updated.
+    """
+    try:
+        import eth_abi
+        from eth_keys import keys as eth_keys_lib
+        from eth_utils import keccak
+    except ImportError as exc:
+        logger.error("Cannot recover signers from calldata: %s (run: pip install eth_account)", exc)
+        return 0
+
+    EXEC_TX_SELECTOR = "6a761202"
+    SAFE_TX_TYPEHASH = bytes.fromhex(
+        "bb8310d486368db6bd6f849402fdd73ad53d316b5a4b2644ad6efe0f941286d8"
+    )
+    DOMAIN_SEPARATOR_TYPEHASH = bytes.fromhex(
+        "47e79534a245952e8b16893a336b85a3d9ea9fa8c573f3d803afb92a79469218"
+    )
+    CHAIN_IDS = {"scroll": 534352, "ethereum": 1}
+
+    chain_id = CHAIN_IDS.get(chain)
+    if not chain_id:
+        logger.warning("_get_signers_from_calldata: unknown chain %s", chain)
+        return 0
+
+    if chain == "ethereum":
+        api_base, api_key, extra = ETHERSCAN_API_BASE, ETHERSCAN_API_KEY, {"chainid": "1"}
+    else:
+        api_base, api_key, extra = SCROLLSCAN_API_BASE, SCROLLSCAN_API_KEY, {}
+
+    rows = conn.execute(
+        "SELECT tx_hash, block_number FROM transactions "
+        "WHERE wallet_id=? AND chain=? AND direction='out' AND signers='' AND is_error=0",
+        (wallet_id, chain),
+    ).fetchall()
+
+    if not rows:
+        return 0
+
+    logger.info("%s/%s: calldata signer recovery for %d tx(s)", wallet_id, chain, len(rows))
+
+    def _proxy(action: str, extra_params: dict):
+        p = {**extra, "module": "proxy", "action": action, **extra_params}
+        if api_key:
+            p["apikey"] = api_key
+        try:
+            r = session.get(api_base, params=p, timeout=20)
+            if r.status_code == 200:
+                return r.json()
+            logger.debug("proxy %s HTTP %s", action, r.status_code)
+        except Exception as e:
+            logger.debug("proxy %s error: %s", action, e)
+        return None
+
+    updated = 0
+
+    for row in rows:
+        tx_hash = row["tx_hash"]
+        block_number = row["block_number"]
+
+        try:
+            # 1. Raw transaction input data
+            tx_resp = _proxy("eth_getTransactionByHash", {"txhash": tx_hash})
+            time.sleep(0.22)
+            if not tx_resp:
+                continue
+            result = tx_resp.get("result")
+            if not result or not isinstance(result, dict):
+                continue
+            input_data = result.get("input", "0x")
+            if (not input_data
+                    or input_data == "0x"
+                    or not input_data.lower().startswith("0x" + EXEC_TX_SELECTOR)):
+                continue  # not an execTransaction — no multisig pattern
+
+            # 2. Safe nonce at block N-1 (before this tx executed)
+            nonce_resp = _proxy("eth_call", {
+                "to": address,
+                "data": "0xaffed0e0",  # nonce() selector
+                "tag": hex(max(0, block_number - 1)),
+            })
+            time.sleep(0.22)
+            nonce = 0
+            if nonce_resp:
+                raw_nonce = nonce_resp.get("result", "0x0")
+                if raw_nonce and raw_nonce not in ("0x", "0x0", ""):
+                    nonce = int(raw_nonce, 16)
+
+            # 3. Decode execTransaction ABI calldata (skip 4-byte selector)
+            raw_input = bytes.fromhex(input_data[2:])
+            payload = raw_input[4:]
+            (to_addr, value, data_bytes, operation,
+             safe_tx_gas, base_gas, inner_gas_price,
+             gas_token, refund_receiver, signatures) = eth_abi.decode(
+                ["address", "uint256", "bytes", "uint8",
+                 "uint256", "uint256", "uint256",
+                 "address", "address", "bytes"],
+                payload,
+            )
+
+            if not signatures:
+                continue
+
+            # 4. EIP-712 domain separator (Safe v1.3+)
+            domain_separator = keccak(eth_abi.encode(
+                ["bytes32", "uint256", "address"],
+                [DOMAIN_SEPARATOR_TYPEHASH, chain_id, address],
+            ))
+
+            # 5. SafeTxHash
+            safe_tx_hash = keccak(eth_abi.encode(
+                ["bytes32", "address", "uint256", "bytes32", "uint8",
+                 "uint256", "uint256", "uint256", "address", "address", "uint256"],
+                [SAFE_TX_TYPEHASH, to_addr, value, keccak(data_bytes), operation,
+                 safe_tx_gas, base_gas, inner_gas_price,
+                 gas_token, refund_receiver, nonce],
+            ))
+
+            # 6. Final EIP-712 signed hash
+            message_hash = keccak(b"\x19\x01" + domain_separator + safe_tx_hash)
+
+            # 7. Recover signer addresses from packed 65-byte signatures
+            recovered = []
+            for i in range(0, len(signatures) - 64, 65):
+                sig_slice = signatures[i: i + 65]
+                r_int = int.from_bytes(sig_slice[:32], "big")
+                s_int = int.from_bytes(sig_slice[32:64], "big")
+                v = sig_slice[64]
+
+                if v in (27, 28):
+                    v_norm = v - 27
+                    hash_to_sign = message_hash
+                elif v in (31, 32):
+                    # eth_sign variant: Safe signs prefixed safeTxHash
+                    v_norm = v - 31
+                    hash_to_sign = keccak(
+                        b"\x19Ethereum Signed Message:\n32" + safe_tx_hash
+                    )
+                else:
+                    continue  # contract sig (v=0) or approved hash (v=1) — unrecoverable
+
+                try:
+                    sig_obj = eth_keys_lib.Signature(vrs=(v_norm, r_int, s_int))
+                    pub_key = sig_obj.recover_public_key_from_msg_hash(hash_to_sign)
+                    recovered.append(pub_key.to_checksum_address())
+                except Exception:
+                    pass
+
+            if recovered:
+                signers_str = ",".join(sorted(recovered))
+                cur = conn.execute(
+                    "UPDATE transactions SET signers=? WHERE tx_hash=? AND wallet_id=? AND chain=?",
+                    (signers_str, tx_hash, wallet_id, chain),
+                )
+                updated += cur.rowcount
+                logger.info(
+                    "%s/%s: recovered %d signer(s) via calldata for %s…",
+                    wallet_id, chain, len(recovered), tx_hash[:10],
+                )
+
+        except Exception as e:
+            logger.error(
+                "%s/%s: calldata recovery error for %s: %s",
+                wallet_id, chain, tx_hash[:10], e,
+            )
+            time.sleep(0.22)
+
+    if updated > 0:
+        conn.commit()
+        logger.info("%s/%s: calldata recovery updated %d row(s)", wallet_id, chain, updated)
+
+    return updated
 
 
 # ── Token balance computation ─────────────────────────────────────────────
