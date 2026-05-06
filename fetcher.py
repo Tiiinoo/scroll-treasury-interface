@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from models import get_db
+from models import get_db, connect_db
 from config import (
     SCROLLSCAN_API_BASE, SCROLLSCAN_API_KEY,
     ETHERSCAN_API_BASE, ETHERSCAN_API_KEY,
@@ -371,24 +371,23 @@ def fetch_safe_multisig_txs(wallet_id: str, address: str, safe_api_base: str = N
     if safe_api_base is None:
         safe_api_base = SAFE_SCROLL_API_BASE
 
-    # Skip the API call entirely if no outgoing transactions are missing signers for this chain
-    conn = get_db()
-    missing_count = conn.execute(
-        "SELECT COUNT(*) as cnt FROM transactions WHERE wallet_id = ? AND chain = ? AND direction = 'out' AND signers = '' AND is_error = 0",
-        (wallet_id, chain)
-    ).fetchone()["cnt"]
-    conn.close()
-
-    if missing_count == 0:
-        logger.info("%s/%s/safe: all signers populated, skipping API call", wallet_id, chain)
-        return
-
-    logger.info("%s/%s/safe: %d transactions missing signers, fetching...", wallet_id, chain, missing_count)
-
-    safe_url = f"{safe_api_base}/safes/{address}/multisig-transactions/?executed=true&limit=100&ordering=-executionDate"
-    logger.info("%s/%s/safe: fetching from %s", wallet_id, chain, safe_url[:80])
-
+    conn = connect_db()
     try:
+        # Skip the API call if no outgoing transactions are missing signers for this chain
+        missing_count = conn.execute(
+            "SELECT COUNT(*) as cnt FROM transactions WHERE wallet_id = ? AND chain = ? AND direction = 'out' AND signers = '' AND is_error = 0",
+            (wallet_id, chain)
+        ).fetchone()["cnt"]
+
+        if missing_count == 0:
+            logger.info("%s/%s/safe: all signers populated, skipping API call", wallet_id, chain)
+            return
+
+        logger.info("%s/%s/safe: %d transactions missing signers, fetching...", wallet_id, chain, missing_count)
+
+        safe_url = f"{safe_api_base}/safes/{address}/multisig-transactions/?executed=true&limit=100&ordering=-executionDate"
+        logger.info("%s/%s/safe: fetching from %s", wallet_id, chain, safe_url[:80])
+
         resp = session.get(safe_url, timeout=30)
         if resp.status_code == 429:
             retry_after = resp.headers.get("Retry-After") or resp.headers.get("x-ratelimit-reset", "unknown")
@@ -402,9 +401,7 @@ def fetch_safe_multisig_txs(wallet_id: str, address: str, safe_api_base: str = N
         results = data.get("results", [])
         logger.info("%s/%s/safe: got %d results", wallet_id, chain, len(results))
 
-        conn = get_db()
         updated_count = 0
-
         for tx in results:
             tx_hash = tx.get("transactionHash")
             if not tx_hash:
@@ -421,12 +418,13 @@ def fetch_safe_multisig_txs(wallet_id: str, address: str, safe_api_base: str = N
             updated_count += cursor.rowcount
 
         conn.commit()
-        conn.close()
 
         logger.info("%s/%s/safe: updated signers for %d row(s) (%d results from API)", wallet_id, chain, updated_count, len(results))
 
     except Exception as e:
-        logger.error("[fetcher] Safe API error for %s/%s (%s): %s", wallet_id, chain, safe_url[:60], e)
+        logger.error("[fetcher] Safe API error for %s/%s: %s", wallet_id, chain, e)
+    finally:
+        conn.close()
 
 
 # ── Token balance computation ─────────────────────────────────────────────
