@@ -71,6 +71,7 @@ async function api(path, options = {}) {
         headers: { 'Content-Type': 'application/json', ...options.headers },
         ...options,
     });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} fetching ${path}`);
     return resp.json();
 }
 
@@ -153,10 +154,17 @@ async function selectWallet(walletId) {
     content.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><p>Loading treasury data...</p></div>';
 
     // Load data
-    await Promise.all([loadStats(walletId), loadTransactions(walletId)]);
-    const budgetComp = await loadBudgetComparison(walletId);
-
-    renderDashboard(budgetComp);
+    try {
+        await Promise.all([loadStats(walletId), loadTransactions(walletId)]);
+        const budgetComp = await loadBudgetComparison(walletId);
+        renderDashboard(budgetComp);
+    } catch (err) {
+        content.innerHTML = `<div class="empty-state">
+            <p><strong>Failed to load treasury data.</strong></p>
+            <p>An error occurred while fetching data. Please try again in a moment.</p>
+            <button class="btn" onclick="selectWallet('${walletId}')">Retry</button>
+        </div>`;
+    }
 }
 
 // ── Rendering ───────────────────────────────────────────────────────────
@@ -1111,18 +1119,25 @@ async function selectOverview() {
     const content = document.getElementById('dashboard-content');
     content.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><p>Loading overview data...</p></div>';
 
-    const results = await Promise.all(
-        state.wallets.map(async w => {
-            const [stats, budgetComp] = await Promise.all([
-                api(`/api/stats/${w.id}`),
-                api(`/api/budget-comparison/${w.id}`)
-            ]);
-            return { wallet: w, stats, budgetComp };
-        })
-    );
-
-    state.globalData = results;
-    renderGlobalView(results);
+    try {
+        const results = await Promise.all(
+            state.wallets.map(async w => {
+                const [stats, budgetComp] = await Promise.all([
+                    api(`/api/stats/${w.id}`),
+                    api(`/api/budget-comparison/${w.id}`)
+                ]);
+                return { wallet: w, stats, budgetComp };
+            })
+        );
+        state.globalData = results;
+        renderGlobalView(results);
+    } catch (err) {
+        content.innerHTML = `<div class="empty-state">
+            <p><strong>Failed to load overview data.</strong></p>
+            <p>An error occurred while fetching data. Please try again in a moment.</p>
+            <button class="btn" onclick="selectOverview()">Retry</button>
+        </div>`;
+    }
 }
 
 function renderGlobalView(allData) {
