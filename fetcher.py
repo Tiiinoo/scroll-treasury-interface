@@ -372,15 +372,17 @@ def fetch_safe_multisig_txs(wallet_id: str, address: str, safe_api_base: str = N
         safe_api_base = SAFE_SCROLL_API_BASE
 
     safe_url = f"{safe_api_base}/safes/{address}/multisig-transactions/?executed=true&limit=100&ordering=-executionDate"
+    logger.info("%s/safe: fetching signers from %s", wallet_id, safe_url[:80])
 
     try:
         resp = session.get(safe_url, timeout=30)
         if resp.status_code != 200:
-            logger.warning("Safe API error %s: %s", resp.status_code, resp.text[:200])
+            logger.warning("%s/safe: API returned %s — %s", wallet_id, resp.status_code, resp.text[:200])
             return
 
         data = resp.json()
         results = data.get("results", [])
+        logger.info("%s/safe: got %d results", wallet_id, len(results))
 
         conn = get_db()
         updated_count = 0
@@ -403,11 +405,10 @@ def fetch_safe_multisig_txs(wallet_id: str, address: str, safe_api_base: str = N
         conn.commit()
         conn.close()
 
-        if updated_count > 0:
-            logger.info("%s/safe: Updated signers for %d transactions", wallet_id, updated_count)
+        logger.info("%s/safe: updated signers for %d row(s) (%d results from API)", wallet_id, updated_count, len(results))
 
     except Exception as e:
-        logger.error("[fetcher] Safe API error: %s", e)
+        logger.error("[fetcher] Safe API error for %s (%s): %s", wallet_id, safe_url[:60], e)
 
 
 # ── Token balance computation ─────────────────────────────────────────────
