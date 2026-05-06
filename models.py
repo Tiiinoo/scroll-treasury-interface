@@ -158,6 +158,14 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_balances_wallet ON balances(wallet_id);
         """)
 
+    # Migration v1: Reset all Ethereum mainnet signers so the fixed calldata
+    # recovery can repopulate them correctly. Earlier code used the wrong nonce
+    # approach and may have stored bad signer addresses.
+    db_version = conn.execute("PRAGMA user_version").fetchone()[0]
+    if db_version < 1:
+        conn.execute("UPDATE transactions SET signers='' WHERE chain='ethereum'")
+        conn.execute("PRAGMA user_version = 1")
+
     conn.commit()
     conn.close()
 
