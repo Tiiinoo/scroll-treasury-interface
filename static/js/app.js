@@ -117,6 +117,51 @@ async function loadBudgetComparison(walletId) {
     return data;
 }
 
+const SAFE_API_BASES = {
+    'scroll':   'https://api.safe.global/tx-service/scr/api/v1',
+    'ethereum': 'https://api.safe.global/tx-service/eth/api/v1',
+};
+
+async function fetchMissingSigners() {
+    const missing = state.transactions.items.filter(
+        tx => tx.direction === 'out' && !tx.signers && tx.category !== 'Internal Operations'
+    );
+    if (missing.length === 0) return;
+
+    // Group by chain+safeAddress so we make one API call per Safe per chain
+    const groups = {};
+    for (const tx of missing) {
+        const key = `${tx.chain}|${tx.from_address}`;
+        if (!groups[key]) groups[key] = { chain: tx.chain, address: tx.from_address, hashes: new Set() };
+        groups[key].hashes.add(tx.tx_hash);
+    }
+
+    const signerMap = {};
+    for (const { chain, address, hashes } of Object.values(groups)) {
+        const base = SAFE_API_BASES[chain];
+        if (!base) continue;
+        try {
+            const resp = await fetch(
+                `${base}/safes/${address}/multisig-transactions/?executed=true&limit=100&ordering=-executionDate`
+            );
+            if (!resp.ok) continue;
+            const data = await resp.json();
+            for (const safeTx of (data.results || [])) {
+                if (!hashes.has(safeTx.transactionHash)) continue;
+                const confs = safeTx.confirmations || [];
+                if (!confs.length) continue;
+                signerMap[safeTx.transactionHash] = confs.map(c => c.owner).sort().join(',');
+            }
+        } catch (e) {
+            console.warn('Safe API client fetch error:', chain, e);
+        }
+    }
+
+    for (const tx of state.transactions.items) {
+        if (signerMap[tx.tx_hash]) tx.signers = signerMap[tx.tx_hash];
+    }
+}
+
 // ── Wallet Selection ────────────────────────────────────────────────────
 
 async function selectWallet(walletId) {
@@ -156,6 +201,7 @@ async function selectWallet(walletId) {
     // Load data
     try {
         await Promise.all([loadStats(walletId), loadTransactions(walletId)]);
+        await fetchMissingSigners();
         const budgetComp = await loadBudgetComparison(walletId);
         renderDashboard(budgetComp);
     } catch (err) {
