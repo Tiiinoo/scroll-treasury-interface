@@ -365,24 +365,42 @@ def fetch_eth_balance(wallet_id: str, address: str, api_base: str = None, api_ke
 
 # ── Safe Multisig signers ─────────────────────────────────────────────────
 
-def fetch_safe_multisig_txs(wallet_id: str, address: str, safe_api_base: str = None):
+def fetch_safe_multisig_txs(wallet_id: str, address: str, safe_api_base: str = None, chain: str = 'scroll'):
     if not address:
         return
     if safe_api_base is None:
         safe_api_base = SAFE_SCROLL_API_BASE
 
+    # Skip the API call entirely if no outgoing transactions are missing signers for this chain
+    conn = get_db()
+    missing_count = conn.execute(
+        "SELECT COUNT(*) as cnt FROM transactions WHERE wallet_id = ? AND chain = ? AND direction = 'out' AND signers = '' AND is_error = 0",
+        (wallet_id, chain)
+    ).fetchone()["cnt"]
+    conn.close()
+
+    if missing_count == 0:
+        logger.info("%s/%s/safe: all signers populated, skipping API call", wallet_id, chain)
+        return
+
+    logger.info("%s/%s/safe: %d transactions missing signers, fetching...", wallet_id, chain, missing_count)
+
     safe_url = f"{safe_api_base}/safes/{address}/multisig-transactions/?executed=true&limit=100&ordering=-executionDate"
-    logger.info("%s/safe: fetching signers from %s", wallet_id, safe_url[:80])
+    logger.info("%s/%s/safe: fetching from %s", wallet_id, chain, safe_url[:80])
 
     try:
         resp = session.get(safe_url, timeout=30)
+        if resp.status_code == 429:
+            retry_after = resp.headers.get("Retry-After") or resp.headers.get("x-ratelimit-reset", "unknown")
+            logger.warning("%s/%s/safe: rate limited (429), retry-after: %s", wallet_id, chain, retry_after)
+            return
         if resp.status_code != 200:
-            logger.warning("%s/safe: API returned %s — %s", wallet_id, resp.status_code, resp.text[:200])
+            logger.warning("%s/%s/safe: API returned %s — %s", wallet_id, chain, resp.status_code, resp.text[:200])
             return
 
         data = resp.json()
         results = data.get("results", [])
-        logger.info("%s/safe: got %d results", wallet_id, len(results))
+        logger.info("%s/%s/safe: got %d results", wallet_id, chain, len(results))
 
         conn = get_db()
         updated_count = 0
@@ -397,18 +415,18 @@ def fetch_safe_multisig_txs(wallet_id: str, address: str, safe_api_base: str = N
             signers = sorted([c["owner"] for c in confirmations])
             signers_str = ",".join(signers)
             cursor = conn.execute(
-                "UPDATE transactions SET signers = ? WHERE tx_hash = ? AND wallet_id = ?",
-                (signers_str, tx_hash, wallet_id)
+                "UPDATE transactions SET signers = ? WHERE tx_hash = ? AND wallet_id = ? AND chain = ?",
+                (signers_str, tx_hash, wallet_id, chain)
             )
             updated_count += cursor.rowcount
 
         conn.commit()
         conn.close()
 
-        logger.info("%s/safe: updated signers for %d row(s) (%d results from API)", wallet_id, updated_count, len(results))
+        logger.info("%s/%s/safe: updated signers for %d row(s) (%d results from API)", wallet_id, chain, updated_count, len(results))
 
     except Exception as e:
-        logger.error("[fetcher] Safe API error for %s (%s): %s", wallet_id, safe_url[:60], e)
+        logger.error("[fetcher] Safe API error for %s/%s (%s): %s", wallet_id, chain, safe_url[:60], e)
 
 
 # ── Token balance computation ─────────────────────────────────────────────
@@ -542,7 +560,7 @@ def _fetch_scroll_wallet(wallet_id: str, address: str):
     time.sleep(0.3)
     fetch_internal_transactions(wallet_id, address, api_fn=_scroll_api_get, chain='scroll')
     time.sleep(0.3)
-    fetch_safe_multisig_txs(wallet_id, address, safe_api_base=SAFE_SCROLL_API_BASE)
+    fetch_safe_multisig_txs(wallet_id, address, safe_api_base=SAFE_SCROLL_API_BASE, chain='scroll')
     time.sleep(0.3)
     fetch_eth_balance(wallet_id, address, api_base=SCROLLSCAN_API_BASE, api_key=SCROLLSCAN_API_KEY, chain='scroll')
     time.sleep(0.3)
@@ -556,7 +574,7 @@ def _fetch_mainnet_wallet(wallet_id: str, address: str):
     time.sleep(0.3)
     fetch_internal_transactions(wallet_id, address, api_fn=_eth_api_get, chain='ethereum')
     time.sleep(0.3)
-    fetch_safe_multisig_txs(wallet_id, address, safe_api_base=SAFE_MAINNET_API_BASE)
+    fetch_safe_multisig_txs(wallet_id, address, safe_api_base=SAFE_MAINNET_API_BASE, chain='ethereum')
     time.sleep(0.3)
     fetch_eth_balance(wallet_id, address, api_base=ETHERSCAN_API_BASE, api_key=ETHERSCAN_API_KEY, chain='ethereum')
     time.sleep(0.3)

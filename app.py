@@ -1251,10 +1251,10 @@ def api_debug_safe_signers():
     from fetcher import fetch_safe_multisig_txs, SAFE_SCROLL_API_BASE, SAFE_MAINNET_API_BASE
     import requests as req_lib
     results = {}
-    for label, base, address, wallet_id in [
-        ("scroll_treasury", SAFE_SCROLL_API_BASE, "0x20fa362323447506D9d0C02483ae97C4e2d6B607", "treasury"),
-        ("eth_treasury",    SAFE_MAINNET_API_BASE, "0x20fa362323447506D9d0C02483ae97C4e2d6B607", "treasury"),
-        ("eth_committee",   SAFE_MAINNET_API_BASE, "0xd0D05390D922a2C45A70EAA4601600F236C02AcC", "committee"),
+    for label, base, address, wallet_id, chain in [
+        ("scroll_treasury", SAFE_SCROLL_API_BASE, "0x20fa362323447506D9d0C02483ae97C4e2d6B607", "treasury",   "scroll"),
+        ("eth_treasury",    SAFE_MAINNET_API_BASE, "0x20fa362323447506D9d0C02483ae97C4e2d6B607", "treasury",   "ethereum"),
+        ("eth_committee",   SAFE_MAINNET_API_BASE, "0xd0D05390D922a2C45A70EAA4601600F236C02AcC", "committee",  "ethereum"),
     ]:
         url = f"{base}/safes/{address}/multisig-transactions/?executed=true&limit=10&ordering=-executionDate"
         try:
@@ -1266,8 +1266,7 @@ def api_debug_safe_signers():
                 "count": data.get("count"),
                 "tx_hashes": [x.get("transactionHash") for x in data.get("results", [])],
             }
-            # Run the actual update
-            fetch_safe_multisig_txs(wallet_id, address, safe_api_base=base)
+            fetch_safe_multisig_txs(wallet_id, address, safe_api_base=base, chain=chain)
             results[label]["update_ran"] = True
         except Exception as e:
             results[label] = {"error": str(e)}
