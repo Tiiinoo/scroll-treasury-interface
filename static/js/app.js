@@ -128,11 +128,13 @@ async function fetchMissingSigners() {
     );
     if (missing.length === 0) return;
 
-    // Group by chain+safeAddress so we make one API call per Safe per chain
+    // Group by wallet_id+chain — use wallet.address (checksummed) not tx.from_address (lowercase)
     const groups = {};
     for (const tx of missing) {
-        const key = `${tx.chain}|${tx.from_address}`;
-        if (!groups[key]) groups[key] = { chain: tx.chain, address: tx.from_address, hashes: new Set() };
+        const wallet = state.wallets.find(w => w.id === tx.wallet_id);
+        if (!wallet || !wallet.address) continue;
+        const key = `${tx.wallet_id}|${tx.chain}`;
+        if (!groups[key]) groups[key] = { chain: tx.chain, address: wallet.address, hashes: new Set() };
         groups[key].hashes.add(tx.tx_hash);
     }
 
