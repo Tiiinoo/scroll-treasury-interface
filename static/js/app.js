@@ -139,6 +139,7 @@ async function fetchMissingSigners() {
     }
 
     const signerMap = {};
+    const debugLines = [];
     for (const { chain, address, hashes } of Object.values(groups)) {
         const base = SAFE_API_BASES[chain];
         if (!base) continue;
@@ -146,6 +147,7 @@ async function fetchMissingSigners() {
             const resp = await fetch(
                 `${base}/safes/${address}/multisig-transactions/?executed=true&limit=100&ordering=-executionDate`
             );
+            debugLines.push(`${chain} ${address.slice(0,10)}: HTTP ${resp.status}`);
             if (!resp.ok) continue;
             const data = await resp.json();
             for (const safeTx of (data.results || [])) {
@@ -155,9 +157,12 @@ async function fetchMissingSigners() {
                 signerMap[safeTx.transactionHash] = confs.map(c => c.owner).sort().join(',');
             }
         } catch (e) {
-            console.warn('Safe API client fetch error:', chain, e);
+            debugLines.push(`${chain}: ERROR ${e.message}`);
         }
     }
+    // Temporary debug banner — remove once signers are confirmed working
+    const dbg = document.getElementById('signer-debug-banner');
+    if (dbg) dbg.textContent = debugLines.join(' | ') || 'no missing signers';
 
     for (const tx of state.transactions.items) {
         if (signerMap[tx.tx_hash]) tx.signers = signerMap[tx.tx_hash];
