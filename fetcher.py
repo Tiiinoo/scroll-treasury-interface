@@ -19,9 +19,9 @@ from config import (
     MULTISIGS, MAINNET_MULTISIGS, TOKEN_COINGECKO_IDS,
 )
 
-# Safe Transaction Service API bases
-SAFE_SCROLL_API_BASE = "https://safe-transaction-scroll.safe.global/api/v1"
-SAFE_MAINNET_API_BASE = "https://safe-transaction-mainnet.safe.global/api/v1"
+# Safe Transaction Service API bases (new consolidated endpoint, old per-chain URLs redirect 308)
+SAFE_SCROLL_API_BASE = "https://api.safe.global/tx-service/scr/api/v1"
+SAFE_MAINNET_API_BASE = "https://api.safe.global/tx-service/eth/api/v1"
 
 logger = logging.getLogger(__name__)
 
